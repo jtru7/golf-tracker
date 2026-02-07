@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Stats Tracker</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>&#9971; Golf Stats Tracker</h1>
+            <div class="subtitle">Track your rounds, analyze your game, lower your handicap</div>
+        </header>
+
+        <div class="main-content">
+            <nav>
+                <button class="active" onclick="showView('dashboard')">Dashboard</button>
+                <button onclick="showView('new-round')">New Round</button>
+                <button onclick="showView('courses')">Courses</button>
+                <button onclick="showView('settings')">Settings</button>
+            </nav>
+
+            <div class="content">
+                <!-- Dashboard View -->
+                <div id="dashboard" class="view active">
+                    <div class="filters">
+                        <input type="date" id="filterStartDate" placeholder="Start Date">
+                        <input type="date" id="filterEndDate" placeholder="End Date">
+                        <select id="filterRounds">
+                            <option value="all">All Rounds</option>
+                            <option value="5">Last 5 Rounds</option>
+                            <option value="10">Last 10 Rounds</option>
+                            <option value="20">Last 20 Rounds</option>
+                        </select>
+                        <button class="secondary" onclick="applyFilters()">Apply Filters</button>
+                    </div>
+
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-card">
+                            <div class="stat-label">Handicap Index</div>
+                            <div class="stat-value" id="handicapValue">--</div>
+                            <div class="stat-subtext">USGA Formula</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Avg Score</div>
+                            <div class="stat-value" id="avgScore">--</div>
+                            <div class="stat-subtext">Last 20 rounds</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Fairways Hit</div>
+                            <div class="stat-value" id="fairwayPct">--%</div>
+                            <div class="stat-subtext">Driving accuracy</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Greens in Reg</div>
+                            <div class="stat-value" id="girPct">--%</div>
+                            <div class="stat-subtext">Approach quality</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Putts/Round</div>
+                            <div class="stat-value" id="avgPutts">--</div>
+                            <div class="stat-subtext">Short game</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Scrambling</div>
+                            <div class="stat-value" id="scramblingPct">--%</div>
+                            <div class="stat-subtext">Up & down success</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>Recent Rounds</h2>
+                        <div class="rounds-list" id="roundsList"></div>
+                    </div>
+                </div>
+
+                <!-- New Round View -->
+                <div id="new-round" class="view">
+                    <div class="card">
+                        <h2>Log New Round</h2>
+                        <div id="roundAlert"></div>
+
+                        <div class="form-group">
+                            <label>Course</label>
+                            <select id="courseSelect" onchange="loadCourseData()">
+                                <option value="">Select a course...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Date</label>
+                            <input type="date" id="roundDate" value="">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Tees Played</label>
+                            <select id="teesPlayed">
+                                <option value="championship">Championship</option>
+                                <option value="back">Back</option>
+                                <option value="middle" selected>Middle</option>
+                                <option value="forward">Forward</option>
+                            </select>
+                        </div>
+
+                        <h3 style="margin: 30px 0 20px; color: var(--forest-green); font-family: 'Crimson Pro', serif;">Hole-by-Hole</h3>
+                        <div class="hole-grid" id="holeInputs"></div>
+
+                        <div style="margin-top: 30px; text-align: center;">
+                            <button class="primary" onclick="saveRound()">Save Round</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Courses View -->
+                <div id="courses" class="view">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">My Courses</h2>
+                            <button class="primary" onclick="showAddCourseModal()">+ Add Course</button>
+                        </div>
+                        <div class="course-list" id="courseList"></div>
+                    </div>
+                </div>
+
+                <!-- Settings View -->
+                <div id="settings" class="view">
+                    <div class="card">
+                        <h2>Google Sheets Integration</h2>
+                        <div id="settingsAlert"></div>
+
+                        <div class="form-group">
+                            <label>Google Sheets API Key</label>
+                            <input type="password" id="apiKey" placeholder="Enter your API key">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Spreadsheet ID</label>
+                            <input type="text" id="spreadsheetId" placeholder="Enter spreadsheet ID from URL">
+                            <small style="color: var(--text-light); margin-top: 5px; display: block;">
+                                Find this in your Google Sheets URL: https://docs.google.com/spreadsheets/d/<strong>SPREADSHEET_ID</strong>/edit
+                            </small>
+                        </div>
+
+                        <button class="primary" onclick="saveSettings()">Save Settings</button>
+                        <button class="secondary" onclick="testConnection()" style="margin-left: 10px;">Test Connection</button>
+
+                        <div style="margin-top: 40px; padding: 20px; background: var(--cream); border-radius: 8px; border: 2px solid var(--border);">
+                            <h3 style="color: var(--forest-green); margin-bottom: 15px;">Setup Instructions</h3>
+                            <ol style="line-height: 2; color: var(--text-dark);">
+                                <li>Create a new Google Sheet</li>
+                                <li>Go to <a href="https://console.cloud.google.com" target="_blank" style="color: var(--blue);">Google Cloud Console</a></li>
+                                <li>Create a new project or select existing</li>
+                                <li>Enable Google Sheets API</li>
+                                <li>Create credentials (API Key)</li>
+                                <li>Restrict the API key to Sheets API only</li>
+                                <li>Copy the API key and spreadsheet ID above</li>
+                                <li>Make your spreadsheet publicly viewable (or use OAuth)</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-top: 20px;">
+                        <h2>Data Management</h2>
+                        <button class="secondary" onclick="exportData()">Export All Data (JSON)</button>
+                        <button class="secondary" onclick="clearAllData()" style="margin-left: 10px; background: var(--red); color: white;">Clear All Data</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Course Modal -->
+    <div id="courseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="courseModalTitle">Add New Course</h2>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Course Name</label>
+                    <input type="text" id="courseName">
+                </div>
+
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" id="courseLocation" placeholder="City, State">
+                </div>
+
+                <div class="form-group">
+                    <label>Number of Holes</label>
+                    <select id="courseHoles" onchange="updateHoleInputs()">
+                        <option value="9">9 Holes</option>
+                        <option value="18" selected>18 Holes</option>
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Course Rating</label>
+                        <input type="number" id="courseRating" step="0.1" placeholder="72.5">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Slope Rating</label>
+                        <input type="number" id="slopeRating" placeholder="113">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Total Yardage</label>
+                    <input type="number" id="totalYardage" placeholder="6800">
+                </div>
+
+                <h3 style="margin: 25px 0 15px; color: var(--forest-green);">Hole Details</h3>
+                <div id="courseHoleInputs" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary" onclick="closeCourseModal()">Cancel</button>
+                <button class="primary" onclick="saveCourse()">Save Course</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
