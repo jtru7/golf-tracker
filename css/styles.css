@@ -232,6 +232,21 @@ input:focus, select:focus, textarea:focus {
     font-size: 0.9rem;
 }
 
+/* Hide number input spinners in hole cards and putt distances */
+.hole-inputs input[type="number"]::-webkit-inner-spin-button,
+.hole-inputs input[type="number"]::-webkit-outer-spin-button,
+.putt-dist-input::-webkit-inner-spin-button,
+.putt-dist-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.hole-inputs input[type="number"],
+.putt-dist-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
 .checkbox-group {
     display: flex;
     gap: 20px;
@@ -357,6 +372,122 @@ input.has-penalty {
     color: var(--text-light);
     font-weight: 600;
 }
+
+/* Round meta row (Date / Tees / Round Type) */
+.round-meta-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 5px;
+}
+
+.round-type-note {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--fairway-green);
+}
+
+.round-type-note.no-handicap {
+    color: var(--text-light);
+}
+
+/* Tee selector and course setup */
+.tee-selector {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.tee-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.tee-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+}
+
+.tee-dot-red { background: #d32f2f; border-color: #d32f2f; }
+.tee-dot-white { background: #ffffff; border-color: #999; }
+.tee-dot-blue { background: #1565c0; border-color: #1565c0; }
+
+.tee-fields {
+    display: none;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    background: var(--cream);
+}
+
+.tee-fields.active {
+    display: block;
+}
+
+.tee-fields-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-dark);
+}
+
+.tee-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+}
+
+.hole-setup-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.hole-setup-table th,
+.hole-setup-table td {
+    padding: 6px 8px;
+    text-align: center;
+    border: 1px solid var(--border);
+}
+
+.hole-setup-table th {
+    background: var(--forest-green);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.hole-setup-table td input {
+    width: 100%;
+    padding: 5px 3px;
+    font-size: 0.8rem;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+}
+
+.hole-setup-table .hole-num-col {
+    font-weight: 700;
+    color: var(--forest-green);
+    background: var(--cream);
+}
+
+.tee-header-red { background: #d32f2f !important; }
+.tee-header-white { background: #777 !important; }
+.tee-header-blue { background: #1565c0 !important; }
 
 button.primary {
     background: linear-gradient(135deg, var(--forest-green), var(--fairway-green));
@@ -852,5 +983,9 @@ button.secondary:hover {
 
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .round-meta-row {
+        grid-template-columns: 1fr;
     }
 }

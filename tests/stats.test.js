@@ -15,7 +15,7 @@ function makeHole(overrides = {}) {
         fairwayDirection: 'hit',
         gir: true,
         approachResult: 'gir',
-        sandSave: false,
+        bunker: false,
         ...overrides
     };
 }
@@ -57,6 +57,7 @@ describe('computeStats', () => {
         expect(stats.girPct).toBeNull();
         expect(stats.avgPutts).toBeNull();
         expect(stats.scramblingPct).toBeNull();
+        expect(stats.sandSavePct).toBeNull();
         expect(stats.feetOfPuttsMade).toBeNull();
         expect(stats.avgFirstPuttDist).toBeNull();
     });
@@ -109,6 +110,33 @@ describe('computeStats', () => {
         const stats = computeStats([round]);
         // Now 1 out of 4 missed-GIR holes scrambled
         expect(stats.scramblingPct).toBe(25);
+    });
+
+    it('returns null sandSavePct when no bunker holes exist', () => {
+        const rounds = [makeRound()]; // default holes have bunker: false
+        const stats = computeStats(rounds);
+        expect(stats.sandSavePct).toBeNull();
+    });
+
+    it('calculates sand save percentage', () => {
+        const round = makeRound();
+        // Hole 1: bunker, score 5, par 4 — no save
+        round.holes[0].bunker = true;
+        // Hole 3: bunker, score 5, par 5 — save (score <= par)
+        round.holes[2].bunker = true;
+        // Hole 5: bunker, score 5, par 4 — no save
+        round.holes[4].bunker = true;
+        const stats = computeStats([round]);
+        expect(stats.sandSavePct).toBe(33); // 1/3 = 33%
+    });
+
+    it('handles legacy sandSave field for backward compat', () => {
+        const round = makeRound();
+        round.holes[0].sandSave = true; // old field
+        round.holes[0].score = 4; // par 4, score 4 — save
+        delete round.holes[0].bunker;
+        const stats = computeStats([round]);
+        expect(stats.sandSavePct).toBe(100); // 1/1
     });
 
     it('returns null putt distance stats when no puttDistances exist', () => {
@@ -198,6 +226,48 @@ describe('computeHandicap', () => {
         // Differentials: 4.5, 2.5, 6.5, 3.5 → sorted: 2.5, 3.5, 4.5, 6.5
         // Best 2: (2.5 + 3.5) / 2 × 0.96 = 2.88
         expect(computeHandicap(rounds)).toBe(2.9);
+    });
+
+    it('excludes casual rounds from handicap', () => {
+        const rounds = [
+            makeRound({ id: '1', totalScore: 40, courseRating: 35.5, slopeRating: 113, roundType: 'normal' }),
+            makeRound({ id: '2', totalScore: 38, courseRating: 35.5, slopeRating: 113, roundType: 'normal' }),
+            makeRound({ id: '3', totalScore: 42, courseRating: 35.5, slopeRating: 113, roundType: 'normal' }),
+            makeRound({ id: '4', totalScore: 30, courseRating: 35.5, slopeRating: 113, roundType: 'casual' }),
+        ];
+        // Casual round (id 4) should be ignored — same result as 3 normal rounds
+        // Best 1 of 3: diff 2.5 × 0.96 = 2.4
+        expect(computeHandicap(rounds)).toBe(2.4);
+    });
+
+    it('excludes scramble rounds from handicap', () => {
+        const rounds = [
+            makeRound({ id: '1', totalScore: 40, courseRating: 35.5, slopeRating: 113, roundType: 'normal' }),
+            makeRound({ id: '2', totalScore: 38, courseRating: 35.5, slopeRating: 113, roundType: 'normal' }),
+            makeRound({ id: '3', totalScore: 42, courseRating: 35.5, slopeRating: 113, roundType: 'scramble' }),
+        ];
+        // Only 2 eligible rounds — not enough
+        expect(computeHandicap(rounds)).toBeNull();
+    });
+
+    it('includes league rounds in handicap', () => {
+        const rounds = [
+            makeRound({ id: '1', totalScore: 40, courseRating: 35.5, slopeRating: 113, roundType: 'league' }),
+            makeRound({ id: '2', totalScore: 38, courseRating: 35.5, slopeRating: 113, roundType: 'league' }),
+            makeRound({ id: '3', totalScore: 42, courseRating: 35.5, slopeRating: 113, roundType: 'normal' }),
+        ];
+        // All 3 eligible — same as 3 normal rounds
+        expect(computeHandicap(rounds)).toBe(2.4);
+    });
+
+    it('treats rounds without roundType as normal (backward compat)', () => {
+        const rounds = [
+            makeRound({ id: '1', totalScore: 40, courseRating: 35.5, slopeRating: 113 }),
+            makeRound({ id: '2', totalScore: 38, courseRating: 35.5, slopeRating: 113 }),
+            makeRound({ id: '3', totalScore: 42, courseRating: 35.5, slopeRating: 113 }),
+        ];
+        // No roundType field → treated as 'normal' → eligible
+        expect(computeHandicap(rounds)).toBe(2.4);
     });
 
     it('applies correct differential formula with different slope', () => {
@@ -340,5 +410,21 @@ describe('buildRoundSummary', () => {
         const round = makeRound();
         const summary = buildRoundSummary(round);
         expect(summary.feetOfPuttsMade).toBe(0);
+    });
+
+    it('counts bunker holes and sand saves', () => {
+        const round = makeRound();
+        round.holes[0].bunker = true; // score 5, par 4 — no save
+        round.holes[1].bunker = true; // score 3, par 3 — save
+        const summary = buildRoundSummary(round);
+        expect(summary.bunkerHoles).toBe(2);
+        expect(summary.sandSaves).toBe(1);
+    });
+
+    it('returns 0 bunkerHoles when no bunkers', () => {
+        const round = makeRound();
+        const summary = buildRoundSummary(round);
+        expect(summary.bunkerHoles).toBe(0);
+        expect(summary.sandSaves).toBe(0);
     });
 });

@@ -67,6 +67,11 @@
                             <div class="stat-value" id="scramblingPct">--%</div>
                             <div class="stat-subtext">Up & down success</div>
                         </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Sand Save</div>
+                            <div class="stat-value" id="sandSavePct">--%</div>
+                            <div class="stat-subtext">Par from bunker</div>
+                        </div>
                     </div>
 
                     <div class="card">
@@ -78,7 +83,7 @@
                 <!-- New Round View -->
                 <div id="new-round" class="view">
                     <div class="card">
-                        <h2>Log New Round</h2>
+                        <h2 id="roundFormTitle">Log New Round</h2>
                         <div id="roundAlert"></div>
 
                         <div class="form-group">
@@ -88,26 +93,34 @@
                             </select>
                         </div>
 
-                        <div class="form-group">
-                            <label>Date</label>
-                            <input type="date" id="roundDate" value="">
-                        </div>
-
-                        <div class="form-group">
-                            <label>Tees Played</label>
-                            <select id="teesPlayed">
-                                <option value="championship">Championship</option>
-                                <option value="back">Back</option>
-                                <option value="middle" selected>Middle</option>
-                                <option value="forward">Forward</option>
-                            </select>
+                        <div class="round-meta-row">
+                            <div class="form-group">
+                                <label>Date</label>
+                                <input type="date" id="roundDate" value="">
+                            </div>
+                            <div class="form-group">
+                                <label>Tees Played</label>
+                                <select id="teesPlayed" onchange="onTeeSelectChange()">
+                                    <option value="">Select tees...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Round Type</label>
+                                <select id="roundType" onchange="onRoundTypeChange()">
+                                    <option value="normal">Normal</option>
+                                    <option value="league">League Match</option>
+                                    <option value="casual">Casual</option>
+                                    <option value="scramble">Scramble</option>
+                                </select>
+                                <small class="round-type-note" id="roundTypeNote">Counts toward handicap</small>
+                            </div>
                         </div>
 
                         <h3 style="margin: 30px 0 20px; color: var(--forest-green); font-family: 'Crimson Pro', serif;">Hole-by-Hole</h3>
                         <div class="hole-grid" id="holeInputs"></div>
 
                         <div style="margin-top: 30px; text-align: center;">
-                            <button class="primary" onclick="saveRound()">Save Round</button>
+                            <button id="saveRoundBtn" class="primary" onclick="saveRound()">Save Round</button>
                         </div>
                     </div>
                 </div>
@@ -192,25 +205,51 @@
                     </select>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label>Course Rating</label>
-                        <input type="number" id="courseRating" step="0.1" placeholder="72.5">
-                    </div>
+                <h3 style="margin: 25px 0 15px; color: var(--forest-green); font-family: 'Crimson Pro', serif;">Tee Sets</h3>
+                <div class="tee-selector">
+                    <label class="tee-toggle">
+                        <input type="checkbox" id="teeEnabledRed" onchange="onTeeToggle()">
+                        <span class="tee-dot tee-dot-red"></span> Red
+                    </label>
+                    <label class="tee-toggle">
+                        <input type="checkbox" id="teeEnabledWhite" onchange="onTeeToggle()">
+                        <span class="tee-dot tee-dot-white"></span> White
+                    </label>
+                    <label class="tee-toggle">
+                        <input type="checkbox" id="teeEnabledBlue" onchange="onTeeToggle()">
+                        <span class="tee-dot tee-dot-blue"></span> Blue
+                    </label>
+                </div>
 
-                    <div class="form-group">
-                        <label>Slope Rating</label>
-                        <input type="number" id="slopeRating" placeholder="113">
+                <div id="teeFieldsRed" class="tee-fields">
+                    <div class="tee-fields-header"><span class="tee-dot tee-dot-red"></span> Red Tees</div>
+                    <div class="tee-fields-grid">
+                        <div class="form-group"><label>Rating</label><input type="number" id="teeRatingRed" step="0.1" placeholder="68.5"></div>
+                        <div class="form-group"><label>Slope</label><input type="number" id="teeSlopeRed" placeholder="110"></div>
+                        <div class="form-group"><label>Total Yardage</label><input type="number" id="teeYardageRed" placeholder="5200"></div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Total Yardage</label>
-                    <input type="number" id="totalYardage" placeholder="6800">
+                <div id="teeFieldsWhite" class="tee-fields">
+                    <div class="tee-fields-header"><span class="tee-dot tee-dot-white"></span> White Tees</div>
+                    <div class="tee-fields-grid">
+                        <div class="form-group"><label>Rating</label><input type="number" id="teeRatingWhite" step="0.1" placeholder="70.5"></div>
+                        <div class="form-group"><label>Slope</label><input type="number" id="teeSlopeWhite" placeholder="113"></div>
+                        <div class="form-group"><label>Total Yardage</label><input type="number" id="teeYardageWhite" placeholder="6200"></div>
+                    </div>
                 </div>
 
-                <h3 style="margin: 25px 0 15px; color: var(--forest-green);">Hole Details</h3>
-                <div id="courseHoleInputs" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;"></div>
+                <div id="teeFieldsBlue" class="tee-fields">
+                    <div class="tee-fields-header"><span class="tee-dot tee-dot-blue"></span> Blue Tees</div>
+                    <div class="tee-fields-grid">
+                        <div class="form-group"><label>Rating</label><input type="number" id="teeRatingBlue" step="0.1" placeholder="72.5"></div>
+                        <div class="form-group"><label>Slope</label><input type="number" id="teeSlopeBlue" placeholder="125"></div>
+                        <div class="form-group"><label>Total Yardage</label><input type="number" id="teeYardageBlue" placeholder="6800"></div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 25px 0 15px; color: var(--forest-green); font-family: 'Crimson Pro', serif;">Hole Details</h3>
+                <div id="courseHoleInputs"></div>
             </div>
             <div class="modal-footer">
                 <button class="secondary" onclick="closeCourseModal()">Cancel</button>
@@ -229,6 +268,7 @@
             <div class="modal-body" id="roundModalBody"></div>
             <div class="modal-footer">
                 <button class="secondary" onclick="closeRoundModal()">Close</button>
+                <button class="btn-small btn-edit" id="editRoundBtn">Edit</button>
                 <button class="btn-small btn-delete" id="deleteRoundBtn">Delete Round</button>
             </div>
         </div>

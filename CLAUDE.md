@@ -29,25 +29,80 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 
 ## Data Model
 ### Course
-`{ id, name, location, numHoles, rating, slope, totalYardage, holes: [{ number, par, yardage }] }`
+```
+{
+  id, name, location, numHoles,
+  holes: [{ number, par }],
+  tees: {
+    red:   { enabled: bool, rating, slope, totalYardage, yardages: [int...], handicaps: [int...] },
+    white: { enabled: bool, rating, slope, totalYardage, yardages: [int...], handicaps: [int...] },
+    blue:  { enabled: bool, rating, slope, totalYardage, yardages: [int...], handicaps: [int...] }
+  }
+}
+```
+- Par is shared across all tees; yardages and hole handicaps are per-tee
+- Each tee set is optional (enabled flag)
+- Old courses with `course.rating`/`course.slope`/`holes[].yardage` are auto-migrated to `tees.white` on load
 
 ### Round
-`{ id, courseId, courseName, numHoles, date, tees, courseRating, slopeRating, totalScore, holes: [{ number, par, score, putts, puttDistances, penalties, fairwayHit, fairwayDirection, gir, approachResult, sandSave }] }`
+`{ id, courseId, courseName, numHoles, date, tees, roundType, courseRating, slopeRating, totalScore, holes: [{ number, par, score, putts, puttDistances, penalties, fairwayHit, fairwayDirection, gir, approachResult, bunker }] }`
+- `roundType`: one of `"normal"`, `"league"`, `"casual"`, `"scramble"`. Normal and League count toward handicap; Casual and Scramble do not. Old rounds without this field are treated as `"normal"`.
 - `puttDistances`: optional array of distances in feet for each putt (e.g., `[25, 4, 1]`). Last entry = made putt. `null` entries for unfilled distances. Missing/undefined on older rounds.
+- `bunker`: boolean, true if player hit into a bunker on this hole. Sand save % is auto-calculated (score <= par when bunker=true). Old rounds with `sandSave` field are auto-migrated.
 
-## Current Stats Computed
-- Handicap Index (USGA: best N of last 20 differentials × 0.96)
+## Current Stats Computed (in `js/stats.js`)
+- Handicap Index (USGA: best N of last 20 differentials × 0.96; only normal + league rounds)
 - Average Score
 - Fairways in Regulation % (non-par-3 holes only)
 - Greens in Regulation %
 - Average Putts per Round
 - Scrambling % (par or better when missing GIR)
-- Feet of Putts Made (sum of made putt distances per round)
-- Average First Putt Distance
+- Sand Save % (par or better when in bunker)
+- Feet of Putts Made (sum of made putt distances)
+- Average First Putt Distance (approach proximity)
+
+## Features Implemented
+- Round types: Normal, League Match, Casual, Scramble (Normal + League count toward handicap)
+- Editable rounds: click a round → detail modal → Edit button → pre-populated form
+- Multi-tee course setup (Red/White/Blue with per-tee rating, slope, yardage, hole handicaps)
+- Putt distance tracking per hole (distance for each putt attempt)
+- Bunker/sand save tracking per hole
+- Google Sheets sync via Apps Script web app
+- Number input spinners hidden on hole cards to prevent scroll accidents
+
+## Planned KPIs (Next Phase — Dashboard Build-Out)
+All stats normalized **per 9 holes** (user plays 80-85% 9-hole rounds).
+
+### Dashboard KPIs
+- Fairway distribution (Left%, Hit%, Right%)
+- Approach distribution (GIR%, Long%, Short%, Left%, Right%) — visual breakdown
+- Avg feet to hole on approach (via `puttDistances[0]`)
+- Scrambling % (already exists)
+- Sand save % (already exists)
+- Putting breakdown: 1-putt%, 2-putt%, 3-putt%, 3+-putt%
+- Feet of putts made per 9
+- Par Conversion % (GIR → par or better, measures finishing ability)
+- Bogey Avoidance % (holes scored par or better / total holes)
+- Bounce-back rate (birdie or better after bogey+)
+- Scoring avg by par type (par 3 / par 4 / par 5)
+- Scoring distribution (birdie+, par, bogey, double, triple+)
+- Penalties per 9
+
+### Course-Level Stats (Courses page)
+- Scoring avg per course (overall and vs par)
+- Best/worst score per course
+- Rounds played count
+- Hardest/easiest holes ranking
+
+### Hole-Level Stats (drill into a course)
+- Scoring avg per hole (and vs par)
+- Scoring distribution per hole
+- Fairway hit % and common miss direction per hole
+- GIR % and common miss direction per hole
+- Avg putts per hole
 
 ## Known Issues / TODOs
 - No data visualization / charts yet (plan: Chart.js)
-- Missing advanced golf KPIs: scoring by par type, putt analysis (1-putt%, 3-putt%), bounce-back rate, approach miss patterns, penalty analysis, sand save %, trends over time
 - Test course is hardcoded in `init()` — should be removable
 - No input validation on course creation (empty name allowed)
 - Inline styles in JS template literals — consider moving to CSS classes

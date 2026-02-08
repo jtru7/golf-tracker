@@ -3,7 +3,7 @@
 
 function computeStats(rounds) {
     if (rounds.length === 0) {
-        return { avgScore: null, fairwayPct: null, girPct: null, avgPutts: null, scramblingPct: null, feetOfPuttsMade: null, avgFirstPuttDist: null };
+        return { avgScore: null, fairwayPct: null, girPct: null, avgPutts: null, scramblingPct: null, sandSavePct: null, feetOfPuttsMade: null, avgFirstPuttDist: null };
     }
 
     const totalScores = rounds.map(r => r.totalScore);
@@ -13,6 +13,7 @@ function computeStats(rounds) {
     let totalGir = 0, girOpportunities = 0;
     let totalPutts = 0;
     let scramblingSuccess = 0, scramblingOpportunities = 0;
+    let sandSaveSuccess = 0, sandSaveOpportunities = 0;
     let totalFeetOfPuttsMade = 0, holesWithMadePuttDist = 0;
     let totalFirstPuttDist = 0, holesWithFirstPuttDist = 0;
 
@@ -34,6 +35,14 @@ function computeStats(rounds) {
                 scramblingOpportunities++;
                 if (hole.score <= hole.par) {
                     scramblingSuccess++;
+                }
+            }
+
+            // Sand save: was in bunker and made par or better
+            if (hole.bunker || hole.sandSave) {
+                sandSaveOpportunities++;
+                if (hole.score <= hole.par) {
+                    sandSaveSuccess++;
                 }
             }
 
@@ -59,13 +68,18 @@ function computeStats(rounds) {
         girPct: girOpportunities > 0 ? Math.round((totalGir / girOpportunities) * 100) : null,
         avgPutts: parseFloat((totalPutts / rounds.length).toFixed(1)),
         scramblingPct: scramblingOpportunities > 0 ? Math.round((scramblingSuccess / scramblingOpportunities) * 100) : null,
+        sandSavePct: sandSaveOpportunities > 0 ? Math.round((sandSaveSuccess / sandSaveOpportunities) * 100) : null,
         feetOfPuttsMade: holesWithMadePuttDist > 0 ? totalFeetOfPuttsMade : null,
         avgFirstPuttDist: holesWithFirstPuttDist > 0 ? parseFloat((totalFirstPuttDist / holesWithFirstPuttDist).toFixed(1)) : null
     };
 }
 
 function computeHandicap(rounds) {
-    const eligible = rounds.filter(r => r.courseRating && r.slopeRating);
+    const handicapTypes = ['normal', 'league'];
+    const eligible = rounds.filter(r =>
+        r.courseRating && r.slopeRating &&
+        handicapTypes.includes(r.roundType || 'normal')
+    );
     if (eligible.length < 3) return null;
 
     const differentials = eligible.map(r => {
@@ -113,6 +127,8 @@ function buildRoundSummary(round) {
     const fairways = round.holes.filter(h => h.par > 3 && h.fairwayHit).length;
     const fairwayTotal = round.holes.filter(h => h.par > 3 && h.fairwayDirection).length;
     const girs = round.holes.filter(h => h.gir).length;
+    const bunkerHoles = round.holes.filter(h => h.bunker || h.sandSave).length;
+    const sandSaves = round.holes.filter(h => (h.bunker || h.sandSave) && h.score <= h.par).length;
     const feetOfPuttsMade = round.holes.reduce((sum, h) => {
         if (h.puttDistances && h.puttDistances.length > 0) {
             const lastDist = h.puttDistances[h.puttDistances.length - 1];
@@ -121,7 +137,7 @@ function buildRoundSummary(round) {
         return sum;
     }, 0);
 
-    return { totalPar, diff, diffStr, putts, fairways, fairwayTotal, girs, feetOfPuttsMade };
+    return { totalPar, diff, diffStr, putts, fairways, fairwayTotal, girs, bunkerHoles, sandSaves, feetOfPuttsMade };
 }
 
 // Export for Vitest (ignored in browser)

@@ -8,6 +8,7 @@ let appData = {
 };
 
 let editingCourseId = null;
+let editingRoundId = null;
 
 // Initialize app
 function init() {
@@ -20,20 +21,28 @@ function init() {
             name: 'TRU TEST Course',
             location: 'Rexburg, ID',
             numHoles: 9,
-            rating: 35.5,
-            slope: 113,
-            totalYardage: 3200,
             holes: [
-                { number: 1, par: 4, yardage: 380 },
-                { number: 2, par: 3, yardage: 165 },
-                { number: 3, par: 5, yardage: 520 },
-                { number: 4, par: 4, yardage: 390 },
-                { number: 5, par: 4, yardage: 350 },
-                { number: 6, par: 3, yardage: 180 },
-                { number: 7, par: 4, yardage: 410 },
-                { number: 8, par: 5, yardage: 495 },
-                { number: 9, par: 4, yardage: 310 }
-            ]
+                { number: 1, par: 4 },
+                { number: 2, par: 3 },
+                { number: 3, par: 5 },
+                { number: 4, par: 4 },
+                { number: 5, par: 4 },
+                { number: 6, par: 3 },
+                { number: 7, par: 4 },
+                { number: 8, par: 5 },
+                { number: 9, par: 4 }
+            ],
+            tees: {
+                red: { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [] },
+                white: {
+                    enabled: true,
+                    rating: 35.5,
+                    slope: 113,
+                    totalYardage: 3200,
+                    yardages: [380, 165, 520, 390, 350, 180, 410, 495, 310]
+                },
+                blue: { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [] }
+            }
         };
         appData.courses.push(testCourse);
         saveToLocalStorage();
@@ -55,6 +64,11 @@ function showView(viewName) {
     document.getElementById(viewName).classList.add('active');
     event.target.classList.add('active');
 
+    // Reset edit state when navigating away from new-round
+    if (viewName !== 'new-round') {
+        resetRoundForm();
+    }
+
     if (viewName === 'dashboard') {
         renderDashboard();
     } else if (viewName === 'courses') {
@@ -73,19 +87,71 @@ function loadFromLocalStorage() {
     const stored = localStorage.getItem('golfTrackerData');
     if (stored) {
         appData = JSON.parse(stored);
+        migrateCourses();
+        migrateRounds();
     }
 }
 
+function migrateCourses() {
+    let changed = false;
+    appData.courses.forEach(course => {
+        // Migrate old format (course.rating, course.slope, holes[].yardage) → tees.white
+        if (!course.tees && (course.rating || course.slope || (course.holes.length > 0 && course.holes[0].yardage !== undefined))) {
+            course.tees = {
+                red: { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [] },
+                white: {
+                    enabled: true,
+                    rating: course.rating || null,
+                    slope: course.slope || null,
+                    totalYardage: course.totalYardage || 0,
+                    yardages: course.holes.map(h => h.yardage || 0)
+                },
+                blue: { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [] }
+            };
+            // Clean up old fields
+            delete course.rating;
+            delete course.slope;
+            delete course.totalYardage;
+            course.holes.forEach(h => delete h.yardage);
+            changed = true;
+        }
+    });
+    if (changed) saveToLocalStorage();
+}
+
+function migrateRounds() {
+    let changed = false;
+    appData.rounds.forEach(round => {
+        round.holes.forEach(hole => {
+            if ('sandSave' in hole) {
+                hole.bunker = hole.sandSave;
+                delete hole.sandSave;
+                changed = true;
+            }
+        });
+    });
+    if (changed) saveToLocalStorage();
+}
+
 // Course management
+const TEE_COLORS = ['red', 'white', 'blue'];
+const TEE_LABELS = { red: 'Red', white: 'White', blue: 'Blue' };
+
 function showAddCourseModal() {
     editingCourseId = null;
     document.getElementById('courseModalTitle').textContent = 'Add New Course';
     document.getElementById('courseName').value = '';
     document.getElementById('courseLocation').value = '';
     document.getElementById('courseHoles').value = '18';
-    document.getElementById('courseRating').value = '';
-    document.getElementById('slopeRating').value = '';
-    document.getElementById('totalYardage').value = '';
+
+    // Reset tee checkboxes and fields
+    TEE_COLORS.forEach(color => {
+        document.getElementById(`teeEnabled${capitalize(color)}`).checked = false;
+        document.getElementById(`teeFields${capitalize(color)}`).classList.remove('active');
+        document.getElementById(`teeRating${capitalize(color)}`).value = '';
+        document.getElementById(`teeSlope${capitalize(color)}`).value = '';
+        document.getElementById(`teeYardage${capitalize(color)}`).value = '';
+    });
 
     renderCourseHoleInputs();
     document.getElementById('courseModal').classList.add('active');
@@ -95,22 +161,74 @@ function closeCourseModal() {
     document.getElementById('courseModal').classList.remove('active');
 }
 
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function getEnabledTees() {
+    return TEE_COLORS.filter(color => document.getElementById(`teeEnabled${capitalize(color)}`).checked);
+}
+
+function onTeeToggle() {
+    TEE_COLORS.forEach(color => {
+        const enabled = document.getElementById(`teeEnabled${capitalize(color)}`).checked;
+        const fields = document.getElementById(`teeFields${capitalize(color)}`);
+        if (enabled) {
+            fields.classList.add('active');
+        } else {
+            fields.classList.remove('active');
+        }
+    });
+    renderCourseHoleInputs();
+}
+
 function renderCourseHoleInputs() {
     const container = document.getElementById('courseHoleInputs');
     const numHoles = parseInt(document.getElementById('courseHoles').value) || 18;
-    container.innerHTML = '';
+    const enabledTees = getEnabledTees();
 
+    // Build table header
+    let headerCols = '<th>Hole</th><th>Par</th>';
+    enabledTees.forEach(color => {
+        headerCols += `<th class="tee-header-${color}">${TEE_LABELS[color]} Yds</th>`;
+        headerCols += `<th class="tee-header-${color}">${TEE_LABELS[color]} Hcp</th>`;
+    });
+
+    // Build table rows
+    let rows = '';
     for (let i = 1; i <= numHoles; i++) {
-        const holeDiv = document.createElement('div');
-        holeDiv.innerHTML = `
-            <label style="font-size: 0.85rem;">Hole ${i}</label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <input type="number" id="holePar${i}" placeholder="Par" min="3" max="6" value="4" style="padding: 8px; font-size: 0.85rem;">
-                <input type="number" id="holeYards${i}" placeholder="Yards" value="400" style="padding: 8px; font-size: 0.85rem;">
-            </div>
-        `;
-        container.appendChild(holeDiv);
+        // Preserve existing values if they exist
+        const existingPar = document.getElementById(`holePar${i}`)?.value;
+        const parVal = existingPar !== undefined && existingPar !== '' ? existingPar : '4';
+
+        let teeCells = '';
+        enabledTees.forEach(color => {
+            const existingYd = document.getElementById(`holeYards${color}${i}`)?.value || '';
+            const existingHcp = document.getElementById(`holeHcp${color}${i}`)?.value || '';
+            teeCells += `<td><input type="number" id="holeYards${color}${i}" placeholder="Yds" value="${existingYd}" min="50" max="700"></td>`;
+            teeCells += `<td><input type="number" id="holeHcp${color}${i}" placeholder="Hcp" value="${existingHcp}" min="1" max="${numHoles}"></td>`;
+        });
+
+        rows += `<tr>
+            <td class="hole-num-col">${i}</td>
+            <td><input type="number" id="holePar${i}" placeholder="Par" min="3" max="6" value="${parVal}"></td>
+            ${teeCells}
+        </tr>`;
     }
+
+    if (enabledTees.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: var(--text-light);">
+                Select at least one tee set above to enter hole details
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <table class="hole-setup-table">
+            <thead><tr>${headerCols}</tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
 }
 
 function updateHoleInputs() {
@@ -119,24 +237,55 @@ function updateHoleInputs() {
 
 function saveCourse() {
     const numHoles = parseInt(document.getElementById('courseHoles').value) || 18;
+    const enabledTees = getEnabledTees();
+
+    if (enabledTees.length === 0) {
+        alert('Please enable at least one tee set.');
+        return;
+    }
+
+    // Build tees object
+    const tees = {};
+    TEE_COLORS.forEach(color => {
+        const cap = capitalize(color);
+        const enabled = document.getElementById(`teeEnabled${cap}`).checked;
+        if (enabled) {
+            const yardages = [];
+            const handicaps = [];
+            for (let i = 1; i <= numHoles; i++) {
+                yardages.push(parseInt(document.getElementById(`holeYards${color}${i}`).value) || 0);
+                handicaps.push(parseInt(document.getElementById(`holeHcp${color}${i}`).value) || 0);
+            }
+            tees[color] = {
+                enabled: true,
+                rating: parseFloat(document.getElementById(`teeRating${cap}`).value) || null,
+                slope: parseInt(document.getElementById(`teeSlope${cap}`).value) || null,
+                totalYardage: parseInt(document.getElementById(`teeYardage${cap}`).value) || 0,
+                yardages: yardages,
+                handicaps: handicaps
+            };
+        } else {
+            tees[color] = { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [], handicaps: [] };
+        }
+    });
+
+    // Build holes (par only, shared across tees)
+    const holes = [];
+    for (let i = 1; i <= numHoles; i++) {
+        holes.push({
+            number: i,
+            par: parseInt(document.getElementById(`holePar${i}`).value) || 4
+        });
+    }
+
     const course = {
         id: editingCourseId || Date.now().toString(),
         name: document.getElementById('courseName').value,
         location: document.getElementById('courseLocation').value,
         numHoles: numHoles,
-        rating: parseFloat(document.getElementById('courseRating').value) || 72,
-        slope: parseInt(document.getElementById('slopeRating').value) || 113,
-        totalYardage: parseInt(document.getElementById('totalYardage').value) || 0,
-        holes: []
+        holes: holes,
+        tees: tees
     };
-
-    for (let i = 1; i <= numHoles; i++) {
-        course.holes.push({
-            number: i,
-            par: parseInt(document.getElementById(`holePar${i}`).value) || 4,
-            yardage: parseInt(document.getElementById(`holeYards${i}`).value) || 400
-        });
-    }
 
     if (editingCourseId) {
         const index = appData.courses.findIndex(c => c.id === editingCourseId);
@@ -161,15 +310,50 @@ function editCourse(courseId) {
     document.getElementById('courseName').value = course.name;
     document.getElementById('courseLocation').value = course.location;
     document.getElementById('courseHoles').value = course.numHoles || course.holes.length;
-    document.getElementById('courseRating').value = course.rating;
-    document.getElementById('slopeRating').value = course.slope;
-    document.getElementById('totalYardage').value = course.totalYardage;
 
+    // Set tee checkboxes and fields
+    TEE_COLORS.forEach(color => {
+        const cap = capitalize(color);
+        const tee = course.tees && course.tees[color];
+        const enabled = tee && tee.enabled;
+        document.getElementById(`teeEnabled${cap}`).checked = enabled;
+        if (enabled) {
+            document.getElementById(`teeFields${cap}`).classList.add('active');
+            document.getElementById(`teeRating${cap}`).value = tee.rating || '';
+            document.getElementById(`teeSlope${cap}`).value = tee.slope || '';
+            document.getElementById(`teeYardage${cap}`).value = tee.totalYardage || '';
+        } else {
+            document.getElementById(`teeFields${cap}`).classList.remove('active');
+            document.getElementById(`teeRating${cap}`).value = '';
+            document.getElementById(`teeSlope${cap}`).value = '';
+            document.getElementById(`teeYardage${cap}`).value = '';
+        }
+    });
+
+    // Render hole table, then populate values
     renderCourseHoleInputs();
 
     course.holes.forEach((hole, i) => {
         document.getElementById(`holePar${i+1}`).value = hole.par;
-        document.getElementById(`holeYards${i+1}`).value = hole.yardage;
+    });
+
+    // Populate per-tee yardages and handicaps
+    TEE_COLORS.forEach(color => {
+        const tee = course.tees && course.tees[color];
+        if (tee && tee.enabled) {
+            if (tee.yardages) {
+                tee.yardages.forEach((yd, i) => {
+                    const input = document.getElementById(`holeYards${color}${i+1}`);
+                    if (input) input.value = yd || '';
+                });
+            }
+            if (tee.handicaps) {
+                tee.handicaps.forEach((hcp, i) => {
+                    const input = document.getElementById(`holeHcp${color}${i+1}`);
+                    if (input) input.value = hcp || '';
+                });
+            }
+        }
     });
 
     document.getElementById('courseModal').classList.add('active');
@@ -201,13 +385,30 @@ function renderCourseList() {
     container.innerHTML = appData.courses.map(course => {
         const numHoles = course.numHoles || course.holes.length;
         const totalPar = course.holes.reduce((sum, h) => sum + h.par, 0);
+
+        // Build tee summary
+        let teeInfo = '';
+        if (course.tees) {
+            const teeStrings = TEE_COLORS
+                .filter(c => course.tees[c] && course.tees[c].enabled)
+                .map(c => {
+                    const t = course.tees[c];
+                    return `<span class="tee-dot tee-dot-${c}" style="display:inline-block;width:10px;height:10px;vertical-align:middle;margin-right:2px;"></span>${TEE_LABELS[c]} ${t.totalYardage || '?'}y (${t.rating || '?'}/${t.slope || '?'})`;
+                });
+            teeInfo = teeStrings.join(' &bull; ');
+        } else {
+            teeInfo = `${course.totalYardage || '?'} yards &bull; Rating: ${course.rating || '?'} &bull; Slope: ${course.slope || '?'}`;
+        }
+
         return `
         <div class="course-item">
             <div class="course-info">
                 <h3>${course.name}</h3>
                 <div class="course-details">
-                    ${course.location} • ${numHoles} Holes • Par ${totalPar} •
-                    ${course.totalYardage} yards • Rating: ${course.rating} • Slope: ${course.slope}
+                    ${course.location} &bull; ${numHoles} Holes &bull; Par ${totalPar}
+                </div>
+                <div class="course-details" style="margin-top: 4px;">
+                    ${teeInfo}
                 </div>
             </div>
             <div class="course-actions">
@@ -226,20 +427,69 @@ function loadCourseSelect() {
 
 function loadCourseData() {
     const courseId = document.getElementById('courseSelect').value;
-    if (!courseId) return;
+    if (!courseId) {
+        document.getElementById('holeInputs').innerHTML = '';
+        document.getElementById('teesPlayed').innerHTML = '<option value="">Select tees...</option>';
+        return;
+    }
 
     const course = appData.courses.find(c => c.id === courseId);
     if (!course) return;
 
+    // Populate tees dropdown with enabled tees
+    const teesSelect = document.getElementById('teesPlayed');
+    if (course.tees) {
+        const enabledTees = TEE_COLORS.filter(c => course.tees[c] && course.tees[c].enabled);
+        teesSelect.innerHTML = enabledTees.map((color, i) =>
+            `<option value="${color}" ${i === 0 ? 'selected' : ''}>${TEE_LABELS[color]}</option>`
+        ).join('');
+    } else {
+        // Legacy course — single tee option
+        teesSelect.innerHTML = '<option value="white" selected>White</option>';
+    }
+
+    renderHoleCards(course);
+}
+
+const HANDICAP_ELIGIBLE_TYPES = ['normal', 'league'];
+const ROUND_TYPE_LABELS = { normal: 'Normal', league: 'League Match', casual: 'Casual', scramble: 'Scramble' };
+
+function onRoundTypeChange() {
+    const roundType = document.getElementById('roundType').value;
+    const note = document.getElementById('roundTypeNote');
+    if (HANDICAP_ELIGIBLE_TYPES.includes(roundType)) {
+        note.textContent = 'Counts toward handicap';
+        note.classList.remove('no-handicap');
+    } else {
+        note.textContent = 'Does not count toward handicap';
+        note.classList.add('no-handicap');
+    }
+}
+
+function onTeeSelectChange() {
+    const courseId = document.getElementById('courseSelect').value;
+    if (!courseId) return;
+    const course = appData.courses.find(c => c.id === courseId);
+    if (!course) return;
+    renderHoleCards(course);
+}
+
+function renderHoleCards(course) {
+    const selectedTee = document.getElementById('teesPlayed').value;
+    const teeData = course.tees && course.tees[selectedTee];
+
     const container = document.getElementById('holeInputs');
-    container.innerHTML = course.holes.map(hole => {
+    container.innerHTML = course.holes.map((hole, idx) => {
+        const yardage = teeData && teeData.yardages && teeData.yardages[idx] ? teeData.yardages[idx] : (hole.yardage || '?');
+        const hcp = teeData && teeData.handicaps && teeData.handicaps[idx] ? teeData.handicaps[idx] : null;
+        const hcpStr = hcp ? ` &bull; Hcp ${hcp}` : '';
         const isPar3 = hole.par === 3;
 
         return `
         <div class="hole-card">
             <div class="hole-header">
                 <div class="hole-number">Hole ${hole.number}</div>
-                <div class="hole-par">Par ${hole.par} • ${hole.yardage}y</div>
+                <div class="hole-par">Par ${hole.par} &bull; ${yardage}y${hcpStr}</div>
             </div>
             <div class="hole-inputs">
                 <!-- Score and Penalties Row -->
@@ -296,7 +546,7 @@ function loadCourseData() {
                     </div>
                 </div>
 
-                <!-- Putts and Sand Save Row -->
+                <!-- Putts and Bunker Row -->
                 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; align-items: end;">
                     <div>
                         <label style="font-size: 0.75rem; margin-bottom: 3px; display: block; color: var(--text-dark); font-weight: 600;">Putts</label>
@@ -304,8 +554,8 @@ function loadCourseData() {
                     </div>
                     <div style="padding-bottom: 6px;">
                         <label class="checkbox-label" style="font-size: 0.75rem;">
-                            <input type="checkbox" id="sandSave${hole.number}">
-                            Sand
+                            <input type="checkbox" id="bunker${hole.number}">
+                            Bunker
                         </label>
                     </div>
                 </div>
@@ -427,28 +677,50 @@ function saveRound() {
             fairwayDirection: fairwayValue, // 'left', 'hit', 'right', or null
             gir: approachValue === 'gir',
             approachResult: approachValue, // 'gir', 'long', 'short', 'left', 'right', or null
-            sandSave: document.getElementById(`sandSave${i}`).checked
+            bunker: document.getElementById(`bunker${i}`).checked
         });
     }
 
+    // Get rating/slope from selected tee
+    const selectedTee = document.getElementById('teesPlayed').value;
+    let courseRating = null;
+    let slopeRating = null;
+    if (course.tees && course.tees[selectedTee]) {
+        courseRating = course.tees[selectedTee].rating;
+        slopeRating = course.tees[selectedTee].slope;
+    } else {
+        // Legacy course fallback
+        courseRating = course.rating || null;
+        slopeRating = course.slope || null;
+    }
+
     const round = {
-        id: Date.now().toString(),
+        id: editingRoundId || Date.now().toString(),
         courseId: courseId,
         courseName: course.name,
         numHoles: numHoles,
         date: document.getElementById('roundDate').value,
-        tees: document.getElementById('teesPlayed').value,
-        courseRating: course.rating,
-        slopeRating: course.slope,
+        tees: selectedTee,
+        roundType: document.getElementById('roundType').value,
+        courseRating: courseRating,
+        slopeRating: slopeRating,
         totalScore: totalScore,
         holes: holes
     };
 
-    appData.rounds.push(round);
+    if (editingRoundId) {
+        const index = appData.rounds.findIndex(r => r.id === editingRoundId);
+        appData.rounds[index] = round;
+    } else {
+        appData.rounds.push(round);
+    }
+
     saveToLocalStorage();
     syncToGoogleSheets();
 
-    showAlert('roundAlert', 'Round saved successfully!', 'success');
+    const msg = editingRoundId ? 'Round updated successfully!' : 'Round saved successfully!';
+    resetRoundForm();
+    showAlert('roundAlert', msg, 'success');
     setTimeout(() => {
         showView('dashboard');
         document.querySelector('nav button').click();
@@ -477,6 +749,7 @@ function renderDashboard() {
     document.getElementById('girPct').textContent = stats.girPct !== null ? stats.girPct + '%' : '--%';
     document.getElementById('avgPutts').textContent = stats.avgPutts ?? '--';
     document.getElementById('scramblingPct').textContent = stats.scramblingPct !== null ? stats.scramblingPct + '%' : '--%';
+    document.getElementById('sandSavePct').textContent = stats.sandSavePct !== null ? stats.sandSavePct + '%' : '--%';
 
     // Calculate handicap
     calculateHandicap();
@@ -510,7 +783,11 @@ function renderDashboard() {
                 </div>
                 <div class="round-stat">
                     <div class="round-stat-label">Tees</div>
-                    <div class="round-stat-value">${round.tees || 'N/A'}</div>
+                    <div class="round-stat-value">${round.tees ? capitalize(round.tees) : 'N/A'}</div>
+                </div>
+                <div class="round-stat">
+                    <div class="round-stat-label">Type</div>
+                    <div class="round-stat-value">${ROUND_TYPE_LABELS[round.roundType] || ROUND_TYPE_LABELS[round.roundType || 'normal']}</div>
                 </div>
             </div>
         </div>
@@ -542,9 +819,11 @@ function viewRound(roundId) {
 
     // Header
     document.getElementById('roundModalTitle').textContent = round.courseName;
+    const roundTypeLabel = ROUND_TYPE_LABELS[round.roundType] || ROUND_TYPE_LABELS[round.roundType || 'normal'];
     document.getElementById('roundModalDate').textContent =
         new Date(round.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) +
-        (round.tees ? ` \u2022 ${round.tees} tees` : '');
+        (round.tees ? ` \u2022 ${capitalize(round.tees)} tees` : '') +
+        ` \u2022 ${roundTypeLabel}`;
 
     // Summary stats
     const summaryHtml = `
@@ -568,6 +847,10 @@ function viewRound(roundId) {
             <div class="round-stat">
                 <div class="round-stat-label">Ft Putts Made</div>
                 <div class="round-stat-value">${summary.feetOfPuttsMade || '--'}</div>
+            </div>
+            <div class="round-stat">
+                <div class="round-stat-label">Sand Saves</div>
+                <div class="round-stat-value">${summary.bunkerHoles > 0 ? summary.sandSaves + '/' + summary.bunkerHoles : '--'}</div>
             </div>
         </div>
     `;
@@ -593,7 +876,8 @@ function viewRound(roundId) {
 
     document.getElementById('roundModalBody').innerHTML = summaryHtml + scorecardHtml;
 
-    // Wire delete button
+    // Wire edit and delete buttons
+    document.getElementById('editRoundBtn').onclick = () => editRound(roundId);
     document.getElementById('deleteRoundBtn').onclick = () => deleteRound(roundId);
 
     document.getElementById('roundModal').classList.add('active');
@@ -669,6 +953,85 @@ function deleteRound(roundId) {
         syncToGoogleSheets();
         closeRoundModal();
         renderDashboard();
+    }
+}
+
+function editRound(roundId) {
+    const round = appData.rounds.find(r => r.id === roundId);
+    if (!round) return;
+
+    editingRoundId = roundId;
+    closeRoundModal();
+
+    // Update form UI for edit mode
+    document.getElementById('roundFormTitle').textContent = 'Edit Round';
+    document.getElementById('saveRoundBtn').textContent = 'Update Round';
+
+    // Switch to new-round view
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('new-round').classList.add('active');
+    document.querySelectorAll('nav button')[1].classList.add('active');
+
+    // Pre-populate course
+    document.getElementById('courseSelect').value = round.courseId;
+    loadCourseData();
+
+    // Pre-populate tees (after loadCourseData populates the dropdown)
+    document.getElementById('teesPlayed').value = round.tees;
+
+    // Pre-populate date and round type
+    document.getElementById('roundDate').value = round.date;
+    document.getElementById('roundType').value = round.roundType || 'normal';
+    onRoundTypeChange();
+
+    // Re-render hole cards with correct tee
+    const course = appData.courses.find(c => c.id === round.courseId);
+    if (course) renderHoleCards(course);
+
+    // Pre-populate each hole's data
+    round.holes.forEach(hole => {
+        const n = hole.number;
+
+        // Score, putts, penalties
+        document.getElementById(`score${n}`).value = hole.score;
+        document.getElementById(`putts${n}`).value = hole.putts || 0;
+        document.getElementById(`penalties${n}`).value = hole.penalties || 0;
+        updatePenaltyStyle(n);
+
+        // Bunker checkbox
+        document.getElementById(`bunker${n}`).checked = hole.bunker || false;
+
+        // Fairway toggle
+        if (hole.fairwayDirection) {
+            selectToggle(n, 'fairway', hole.fairwayDirection);
+        }
+
+        // Approach toggle
+        if (hole.approachResult) {
+            selectToggle(n, 'approach', hole.approachResult);
+        }
+
+        // Putt distances
+        if (hole.putts > 0) {
+            renderPuttDistances(n);
+            if (hole.puttDistances) {
+                hole.puttDistances.forEach((dist, idx) => {
+                    const input = document.getElementById(`puttDist${n}_${idx + 1}`);
+                    if (input && dist !== null && dist !== undefined) {
+                        input.value = dist;
+                    }
+                });
+            }
+        }
+    });
+}
+
+function resetRoundForm() {
+    if (editingRoundId) {
+        editingRoundId = null;
+        document.getElementById('roundFormTitle').textContent = 'Log New Round';
+        document.getElementById('saveRoundBtn').textContent = 'Save Round';
     }
 }
 
