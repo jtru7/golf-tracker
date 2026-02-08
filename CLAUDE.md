@@ -45,7 +45,6 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 ## Known Issues / TODOs
 - No data visualization / charts yet (plan: Chart.js)
 - Missing advanced golf KPIs: scoring by par type, putt analysis (1-putt%, 3-putt%), bounce-back rate, approach miss patterns, penalty analysis, sand save %, trends over time
-- `viewRound()` uses `alert()` — needs a proper detail modal
 - Test course is hardcoded in `init()` — should be removable
 - No input validation on course creation (empty name allowed)
 - Inline styles in JS template literals — consider moving to CSS classes

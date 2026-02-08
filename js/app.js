@@ -497,7 +497,135 @@ function applyFilters() {
 function viewRound(roundId) {
     const round = appData.rounds.find(r => r.id === roundId);
     if (!round) return;
-    alert(`Round Details:\n\nCourse: ${round.courseName}\nDate: ${round.date}\nScore: ${round.totalScore}\nHoles: ${round.numHoles || round.holes.length}\n\nHole-by-hole:\n${round.holes.map(h => `H${h.number}: ${h.score} (Par ${h.par}) - ${h.putts} putts`).join('\n')}`);
+
+    const summary = buildRoundSummary(round);
+
+    // Header
+    document.getElementById('roundModalTitle').textContent = round.courseName;
+    document.getElementById('roundModalDate').textContent =
+        new Date(round.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) +
+        (round.tees ? ` \u2022 ${round.tees} tees` : '');
+
+    // Summary stats
+    const summaryHtml = `
+        <div class="round-detail-summary">
+            <div class="round-stat">
+                <div class="round-stat-label">Score</div>
+                <div class="round-stat-value">${round.totalScore} (${summary.diffStr})</div>
+            </div>
+            <div class="round-stat">
+                <div class="round-stat-label">Putts</div>
+                <div class="round-stat-value">${summary.putts}</div>
+            </div>
+            <div class="round-stat">
+                <div class="round-stat-label">Fairways</div>
+                <div class="round-stat-value">${summary.fairways}/${summary.fairwayTotal}</div>
+            </div>
+            <div class="round-stat">
+                <div class="round-stat-label">GIR</div>
+                <div class="round-stat-value">${summary.girs}/${round.holes.length}</div>
+            </div>
+        </div>
+    `;
+
+    // Build horizontal scorecard(s)
+    const numHoles = round.holes.length;
+    const is18 = numHoles > 9;
+    let scorecardHtml = '';
+
+    if (is18) {
+        scorecardHtml = buildScorecardTable(round.holes.slice(0, 9), 'Out') +
+                        buildScorecardTable(round.holes.slice(9, 18), 'In');
+    } else {
+        scorecardHtml = buildScorecardTable(round.holes, 'Total');
+    }
+
+    // Grand total for 18-hole rounds
+    if (is18) {
+        scorecardHtml += `<div style="text-align: right; font-weight: 700; font-size: 1rem; color: var(--forest-green); margin-top: 5px;">
+            Total: ${round.totalScore} (Par ${summary.totalPar})
+        </div>`;
+    }
+
+    document.getElementById('roundModalBody').innerHTML = summaryHtml + scorecardHtml;
+
+    // Wire delete button
+    document.getElementById('deleteRoundBtn').onclick = () => deleteRound(roundId);
+
+    document.getElementById('roundModal').classList.add('active');
+}
+
+function buildScorecardTable(holes, label) {
+    const totalPar = holes.reduce((sum, h) => sum + h.par, 0);
+    const totalScore = holes.reduce((sum, h) => sum + h.score, 0);
+    const totalPutts = holes.reduce((sum, h) => sum + (h.putts || 0), 0);
+
+    // Hole number row
+    const holeRow = holes.map(h => `<th class="hole-num-cell">${h.number}</th>`).join('') +
+        `<th class="col-total">${label}</th>`;
+
+    // Par row
+    const parRow = holes.map(h => `<td>${h.par}</td>`).join('') +
+        `<td class="col-total">${totalPar}</td>`;
+
+    // Score row with shapes
+    const scoreRow = holes.map(h => {
+        const diff = h.score - h.par;
+        let cls = 'score-par';
+        if (diff <= -2) cls = 'score-eagle';
+        else if (diff === -1) cls = 'score-birdie';
+        else if (diff === 1) cls = 'score-bogey';
+        else if (diff >= 2) cls = 'score-double';
+        return `<td class="score-cell ${cls}"><span class="score-shape">${h.score}</span></td>`;
+    }).join('') + `<td class="col-total">${totalScore}</td>`;
+
+    // Putts row
+    const puttsRow = holes.map(h => `<td>${h.putts || 0}</td>`).join('') +
+        `<td class="col-total">${totalPutts}</td>`;
+
+    // Fairway row
+    const fwyRow = holes.map(h => {
+        if (h.par <= 3) return '<td>-</td>';
+        if (!h.fairwayDirection) return '<td>-</td>';
+        if (h.fairwayHit) return '<td><span class="fairway-hit">\u2713</span></td>';
+        const arrows = { left: '\u2190', right: '\u2192' };
+        return `<td><span class="fairway-miss">${arrows[h.fairwayDirection] || '\u2717'}</span></td>`;
+    }).join('') + '<td class="col-total"></td>';
+
+    // GIR row
+    const girRow = holes.map(h => {
+        if (!h.approachResult) return '<td>-</td>';
+        if (h.gir) return '<td><span class="fairway-hit">\u2713</span></td>';
+        const arrows = { long: '\u2191', short: '\u2193', left: '\u2190', right: '\u2192' };
+        return `<td><span class="fairway-miss">${arrows[h.approachResult] || '\u2717'}</span></td>`;
+    }).join('') + '<td class="col-total"></td>';
+
+    return `
+        <div style="overflow-x: auto; margin-bottom: 15px;">
+        <table class="scorecard">
+            <tr><td class="row-label">Hole</td>${holeRow}</tr>
+            <tr><td class="row-label">Par</td>${parRow}</tr>
+            <tr><td class="row-label">Score</td>${scoreRow}</tr>
+            <tr><td class="row-label">Putts</td>${puttsRow}</tr>
+            <tr><td class="row-label">FWY</td>${fwyRow}</tr>
+            <tr><td class="row-label">GIR</td>${girRow}</tr>
+        </table>
+        </div>
+    `;
+}
+
+function closeRoundModal() {
+    document.getElementById('roundModal').classList.remove('active');
+}
+
+function deleteRound(roundId) {
+    if (confirm('Are you sure you want to delete this round?')) {
+        appData.rounds = appData.rounds.filter(r => r.id !== roundId);
+        saveToLocalStorage();
+        syncToGoogleSheets();
+        closeRoundModal();
+        renderDashboard();
+    }
 }
 
 // Alert helper

@@ -565,7 +565,7 @@ button.secondary:hover {
 .modal-content {
     background: var(--white);
     border-radius: 12px;
-    max-width: 600px;
+    max-width: 750px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
@@ -646,6 +646,140 @@ button.secondary:hover {
     font-size: 1.5rem;
     margin-bottom: 10px;
     color: var(--text-dark);
+}
+
+/* Round Detail Modal */
+.round-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+}
+
+.round-detail-summary .round-stat {
+    text-align: center;
+    padding: 10px;
+    background: var(--cream);
+    border-radius: 6px;
+}
+
+/* Horizontal scorecard table */
+.scorecard {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    margin-bottom: 15px;
+}
+
+.scorecard th,
+.scorecard td {
+    padding: 6px 4px;
+    text-align: center;
+    border: 1px solid var(--border);
+    min-width: 32px;
+}
+
+.scorecard th {
+    background: var(--forest-green);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.scorecard .row-label {
+    background: var(--cream);
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-dark);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    padding: 6px 8px;
+}
+
+.scorecard .col-total {
+    background: var(--sand-light);
+    font-weight: 700;
+}
+
+.scorecard .hole-num-cell {
+    font-family: 'Crimson Pro', serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--forest-green);
+}
+
+/* Score shape decorations */
+.score-cell {
+    position: relative;
+}
+
+.score-shape {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+/* Birdie: single circle */
+.score-birdie .score-shape {
+    border: 2px solid var(--fairway-green);
+    border-radius: 50%;
+    color: var(--forest-green);
+    background: rgba(45, 95, 63, 0.1);
+}
+
+/* Eagle or better: double circle */
+.score-eagle .score-shape {
+    border: 2px solid var(--fairway-green);
+    border-radius: 50%;
+    color: var(--white);
+    background: var(--fairway-green);
+    outline: 2px solid var(--fairway-green);
+    outline-offset: 2px;
+}
+
+/* Bogey: single box */
+.score-bogey .score-shape {
+    border: 2px solid var(--red);
+    border-radius: 2px;
+    color: var(--red);
+    background: rgba(168, 68, 72, 0.08);
+}
+
+/* Double bogey or worse: double box */
+.score-double .score-shape {
+    border: 2px solid var(--red);
+    border-radius: 2px;
+    color: var(--red);
+    background: rgba(168, 68, 72, 0.15);
+    outline: 2px solid var(--red);
+    outline-offset: 2px;
+}
+
+/* Par: no decoration */
+.score-par .score-shape {
+    color: var(--text-dark);
+}
+
+.fairway-hit {
+    color: var(--fairway-green);
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+.fairway-miss {
+    color: var(--red);
+    font-weight: 600;
+    font-size: 0.75rem;
 }
 
 @media (max-width: 768px) {
