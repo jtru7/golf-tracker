@@ -57,6 +57,8 @@ describe('computeStats', () => {
         expect(stats.girPct).toBeNull();
         expect(stats.avgPutts).toBeNull();
         expect(stats.scramblingPct).toBeNull();
+        expect(stats.feetOfPuttsMade).toBeNull();
+        expect(stats.avgFirstPuttDist).toBeNull();
     });
 
     it('calculates correct average score', () => {
@@ -107,6 +109,50 @@ describe('computeStats', () => {
         const stats = computeStats([round]);
         // Now 1 out of 4 missed-GIR holes scrambled
         expect(stats.scramblingPct).toBe(25);
+    });
+
+    it('returns null putt distance stats when no puttDistances exist', () => {
+        const rounds = [makeRound()];
+        const stats = computeStats(rounds);
+        expect(stats.feetOfPuttsMade).toBeNull();
+        expect(stats.avgFirstPuttDist).toBeNull();
+    });
+
+    it('calculates feetOfPuttsMade from last putt distance in each hole', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [25, 4];    // 2 putts, made=4ft
+        round.holes[1].puttDistances = [8];         // 1 putt, made=8ft
+        round.holes[2].puttDistances = [30, 6, 2];  // 3 putts, made=2ft
+        const stats = computeStats([round]);
+        expect(stats.feetOfPuttsMade).toBe(14); // 4 + 8 + 2
+    });
+
+    it('calculates avgFirstPuttDist from first putt distance across holes', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [25, 4];    // first=25
+        round.holes[1].puttDistances = [8];         // first=8
+        round.holes[2].puttDistances = [30, 6, 2];  // first=30
+        const stats = computeStats([round]);
+        expect(stats.avgFirstPuttDist).toBe(21); // (25 + 8 + 30) / 3
+    });
+
+    it('skips null distances in puttDistances arrays', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [null, 4];   // first=null (skip), made=4
+        round.holes[1].puttDistances = [8];          // first=8, made=8
+        round.holes[2].puttDistances = [30, null];   // first=30, made=null (skip)
+        const stats = computeStats([round]);
+        expect(stats.feetOfPuttsMade).toBe(12); // 4 + 8
+        expect(stats.avgFirstPuttDist).toBe(19); // (8 + 30) / 2
+    });
+
+    it('handles empty puttDistances array (chip-in)', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = []; // chip-in
+        round.holes[1].puttDistances = [5]; // 1 putt
+        const stats = computeStats([round]);
+        expect(stats.feetOfPuttsMade).toBe(5);
+        expect(stats.avgFirstPuttDist).toBe(5);
     });
 });
 
@@ -280,5 +326,19 @@ describe('buildRoundSummary', () => {
         const round = makeRound();
         const summary = buildRoundSummary(round);
         expect(summary.girs).toBe(5); // holes 2,3,4,7,9
+    });
+
+    it('calculates feetOfPuttsMade for a round', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [20, 3];  // made=3
+        round.holes[6].puttDistances = [15];      // made=15
+        const summary = buildRoundSummary(round);
+        expect(summary.feetOfPuttsMade).toBe(18); // 3 + 15
+    });
+
+    it('returns 0 feetOfPuttsMade when no puttDistances exist', () => {
+        const round = makeRound();
+        const summary = buildRoundSummary(round);
+        expect(summary.feetOfPuttsMade).toBe(0);
     });
 });

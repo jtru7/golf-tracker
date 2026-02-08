@@ -316,6 +316,48 @@ input.has-penalty {
     font-weight: 700;
 }
 
+/* Putt distance inputs */
+.putt-dist-container {
+    margin-top: 8px;
+}
+
+.putt-dist-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.putt-dist-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.putt-dist-input {
+    width: 52px;
+    padding: 5px 4px;
+    font-size: 0.8rem;
+    text-align: center;
+    border-radius: 4px;
+    border: 2px solid var(--border);
+}
+
+.putt-dist-input.putt-dist-made {
+    border-color: var(--fairway-green);
+    background: rgba(45, 95, 63, 0.08);
+}
+
+.putt-dist-input.putt-dist-missed {
+    border-color: var(--red);
+    background: rgba(168, 68, 72, 0.06);
+}
+
+.putt-dist-suffix {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    font-weight: 600;
+}
+
 button.primary {
     background: linear-gradient(135deg, var(--forest-green), var(--fairway-green));
     color: var(--white);

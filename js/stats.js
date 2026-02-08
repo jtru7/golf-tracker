@@ -3,7 +3,7 @@
 
 function computeStats(rounds) {
     if (rounds.length === 0) {
-        return { avgScore: null, fairwayPct: null, girPct: null, avgPutts: null, scramblingPct: null };
+        return { avgScore: null, fairwayPct: null, girPct: null, avgPutts: null, scramblingPct: null, feetOfPuttsMade: null, avgFirstPuttDist: null };
     }
 
     const totalScores = rounds.map(r => r.totalScore);
@@ -13,6 +13,8 @@ function computeStats(rounds) {
     let totalGir = 0, girOpportunities = 0;
     let totalPutts = 0;
     let scramblingSuccess = 0, scramblingOpportunities = 0;
+    let totalFeetOfPuttsMade = 0, holesWithMadePuttDist = 0;
+    let totalFirstPuttDist = 0, holesWithFirstPuttDist = 0;
 
     rounds.forEach(round => {
         round.holes.forEach(hole => {
@@ -34,6 +36,20 @@ function computeStats(rounds) {
                     scramblingSuccess++;
                 }
             }
+
+            // Putt distance stats
+            if (hole.puttDistances && hole.puttDistances.length > 0) {
+                const lastDist = hole.puttDistances[hole.puttDistances.length - 1];
+                if (lastDist !== null && lastDist !== undefined) {
+                    totalFeetOfPuttsMade += lastDist;
+                    holesWithMadePuttDist++;
+                }
+                const firstDist = hole.puttDistances[0];
+                if (firstDist !== null && firstDist !== undefined) {
+                    totalFirstPuttDist += firstDist;
+                    holesWithFirstPuttDist++;
+                }
+            }
         });
     });
 
@@ -42,7 +58,9 @@ function computeStats(rounds) {
         fairwayPct: fairwayOpportunities > 0 ? Math.round((totalFairways / fairwayOpportunities) * 100) : null,
         girPct: girOpportunities > 0 ? Math.round((totalGir / girOpportunities) * 100) : null,
         avgPutts: parseFloat((totalPutts / rounds.length).toFixed(1)),
-        scramblingPct: scramblingOpportunities > 0 ? Math.round((scramblingSuccess / scramblingOpportunities) * 100) : null
+        scramblingPct: scramblingOpportunities > 0 ? Math.round((scramblingSuccess / scramblingOpportunities) * 100) : null,
+        feetOfPuttsMade: holesWithMadePuttDist > 0 ? totalFeetOfPuttsMade : null,
+        avgFirstPuttDist: holesWithFirstPuttDist > 0 ? parseFloat((totalFirstPuttDist / holesWithFirstPuttDist).toFixed(1)) : null
     };
 }
 
@@ -95,8 +113,15 @@ function buildRoundSummary(round) {
     const fairways = round.holes.filter(h => h.par > 3 && h.fairwayHit).length;
     const fairwayTotal = round.holes.filter(h => h.par > 3 && h.fairwayDirection).length;
     const girs = round.holes.filter(h => h.gir).length;
+    const feetOfPuttsMade = round.holes.reduce((sum, h) => {
+        if (h.puttDistances && h.puttDistances.length > 0) {
+            const lastDist = h.puttDistances[h.puttDistances.length - 1];
+            return sum + (lastDist || 0);
+        }
+        return sum;
+    }, 0);
 
-    return { totalPar, diff, diffStr, putts, fairways, fairwayTotal, girs };
+    return { totalPar, diff, diffStr, putts, fairways, fairwayTotal, girs, feetOfPuttsMade };
 }
 
 // Export for Vitest (ignored in browser)

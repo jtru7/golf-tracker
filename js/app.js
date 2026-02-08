@@ -300,7 +300,7 @@ function loadCourseData() {
                 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; align-items: end;">
                     <div>
                         <label style="font-size: 0.75rem; margin-bottom: 3px; display: block; color: var(--text-dark); font-weight: 600;">Putts</label>
-                        <input type="number" id="putts${hole.number}" placeholder="Putts" min="0" max="10" style="width: 100%; padding: 8px;">
+                        <input type="number" id="putts${hole.number}" placeholder="Putts" min="0" max="10" style="width: 100%; padding: 8px;" oninput="renderPuttDistances(${hole.number})">
                     </div>
                     <div style="padding-bottom: 6px;">
                         <label class="checkbox-label" style="font-size: 0.75rem;">
@@ -309,9 +309,36 @@ function loadCourseData() {
                         </label>
                     </div>
                 </div>
+                <div id="puttDistContainer${hole.number}" class="putt-dist-container"></div>
             </div>
         </div>
     `}).join('');
+}
+
+function renderPuttDistances(holeNumber) {
+    const container = document.getElementById(`puttDistContainer${holeNumber}`);
+    const numPutts = parseInt(document.getElementById(`putts${holeNumber}`).value) || 0;
+
+    if (numPutts === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '<div class="putt-dist-row">';
+    for (let p = 1; p <= numPutts; p++) {
+        const isMade = (p === numPutts);
+        const colorClass = isMade ? 'putt-dist-made' : 'putt-dist-missed';
+        html += `
+            <div class="putt-dist-input-wrapper">
+                <input type="number" id="puttDist${holeNumber}_${p}"
+                       class="putt-dist-input ${colorClass}"
+                       placeholder="${p}" min="1" max="150">
+                <span class="putt-dist-suffix">ft</span>
+            </div>
+        `;
+    }
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 // Toggle button selection
@@ -382,6 +409,19 @@ function saveRound() {
             par: course.holes[i-1].par,
             score: score,
             putts: parseInt(document.getElementById(`putts${i}`).value) || 0,
+            puttDistances: (() => {
+                const numPutts = parseInt(document.getElementById(`putts${i}`).value) || 0;
+                const distances = [];
+                for (let p = 1; p <= numPutts; p++) {
+                    const distInput = document.getElementById(`puttDist${i}_${p}`);
+                    if (distInput && distInput.value !== '') {
+                        distances.push(parseInt(distInput.value));
+                    } else {
+                        distances.push(null);
+                    }
+                }
+                return distances;
+            })(),
             penalties: parseInt(document.getElementById(`penalties${i}`).value) || 0,
             fairwayHit: fairwayValue === 'hit',
             fairwayDirection: fairwayValue, // 'left', 'hit', 'right', or null
@@ -524,6 +564,10 @@ function viewRound(roundId) {
             <div class="round-stat">
                 <div class="round-stat-label">GIR</div>
                 <div class="round-stat-value">${summary.girs}/${round.holes.length}</div>
+            </div>
+            <div class="round-stat">
+                <div class="round-stat-label">Ft Putts Made</div>
+                <div class="round-stat-value">${summary.feetOfPuttsMade || '--'}</div>
             </div>
         </div>
     `;

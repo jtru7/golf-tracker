@@ -32,7 +32,8 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 `{ id, name, location, numHoles, rating, slope, totalYardage, holes: [{ number, par, yardage }] }`
 
 ### Round
-`{ id, courseId, courseName, numHoles, date, tees, courseRating, slopeRating, totalScore, holes: [{ number, par, score, putts, penalties, fairwayHit, fairwayDirection, gir, approachResult, sandSave }] }`
+`{ id, courseId, courseName, numHoles, date, tees, courseRating, slopeRating, totalScore, holes: [{ number, par, score, putts, puttDistances, penalties, fairwayHit, fairwayDirection, gir, approachResult, sandSave }] }`
+- `puttDistances`: optional array of distances in feet for each putt (e.g., `[25, 4, 1]`). Last entry = made putt. `null` entries for unfilled distances. Missing/undefined on older rounds.
 
 ## Current Stats Computed
 - Handicap Index (USGA: best N of last 20 differentials × 0.96)
@@ -41,6 +42,8 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 - Greens in Regulation %
 - Average Putts per Round
 - Scrambling % (par or better when missing GIR)
+- Feet of Putts Made (sum of made putt distances per round)
+- Average First Putt Distance
 
 ## Known Issues / TODOs
 - No data visualization / charts yet (plan: Chart.js)
