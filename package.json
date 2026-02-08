@@ -1,0 +1,25 @@
+{
+  "name": "golf-tracker",
+  "version": "1.0.0",
+  "description": "A personal golf statistics tracking web app. Log rounds hole-by-hole, track key performance indicators, and sync data to Google Sheets — no database or server required.",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jtru7/golf-tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jtru7/golf-tracker/issues"
+  },
+  "homepage": "https://github.com/jtru7/golf-tracker#readme",
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  }
+}

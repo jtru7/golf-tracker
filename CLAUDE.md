@@ -6,17 +6,22 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 ## Tech Stack
 - Vanilla HTML, CSS, JavaScript — no frameworks, no build tools
 - localStorage for primary data persistence
+- Google Sheets sync via Google Apps Script web app (see `google-apps-script/Code.gs`)
 - Google Fonts: Crimson Pro (headings/display), Montserrat (body/UI)
-- No npm, no bundler, no server
+- Vitest for unit testing (`npm test`)
+- npm for dev tooling only (no runtime dependencies)
 
 ## File Structure
 - `index.html` — HTML shell, links to CSS and JS
 - `css/styles.css` — all styles, CSS custom properties for theming
-- `js/app.js` — all application logic (single file for now)
+- `js/app.js` — DOM interaction, event handlers, rendering
+- `js/stats.js` — pure calculation functions (testable, no DOM access)
 - `assets/` — reserved for images/icons
+- `google-apps-script/Code.gs` — Apps Script to deploy in Google Sheets for read/write sync
+- `tests/stats.test.js` — Vitest unit tests for stats.js
 
 ## Architecture
-- Single global `appData` object holds all state: `{ courses, rounds, settings }`
+- Single global `appData` object holds all state: `{ courses, rounds, settings: { webAppUrl } }`
 - `saveToLocalStorage()` / `loadFromLocalStorage()` for persistence
 - Views are toggled via `showView()` — dashboard, new-round, courses, settings
 - Course and round data are rendered via DOM innerHTML construction
@@ -38,7 +43,6 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 - Scrambling % (par or better when missing GIR)
 
 ## Known Issues / TODOs
-- **Google Sheets sync uses API key for writes — this won't work.** API keys are read-only. Need to replace with Google Apps Script web app approach.
 - No data visualization / charts yet (plan: Chart.js)
 - Missing advanced golf KPIs: scoring by par type, putt analysis (1-putt%, 3-putt%), bounce-back rate, approach miss patterns, penalty analysis, sand save %, trends over time
 - `viewRound()` uses `alert()` — needs a proper detail modal

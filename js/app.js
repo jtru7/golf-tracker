@@ -3,8 +3,7 @@ let appData = {
     courses: [],
     rounds: [],
     settings: {
-        apiKey: '',
-        spreadsheetId: ''
+        webAppUrl: ''
     }
 };
 
@@ -430,51 +429,14 @@ function renderDashboard() {
         return;
     }
 
-    // Calculate stats
-    const totalScores = rounds.map(r => r.totalScore);
-    const avgScore = (totalScores.reduce((a, b) => a + b, 0) / totalScores.length).toFixed(1);
+    // Calculate stats using pure function from stats.js
+    const stats = computeStats(rounds);
 
-    let totalFairways = 0, fairwayOpportunities = 0;
-    let totalGir = 0, girOpportunities = 0;
-    let totalPutts = 0;
-    let scramblingSuccess = 0, scramblingOpportunities = 0;
-
-    rounds.forEach(round => {
-        round.holes.forEach(hole => {
-            // Fairway (only non-par-3)
-            if (hole.par > 3 && hole.fairwayDirection) {
-                fairwayOpportunities++;
-                if (hole.fairwayHit) totalFairways++;
-            }
-
-            // GIR
-            if (hole.approachResult) {
-                girOpportunities++;
-                if (hole.gir) totalGir++;
-            }
-
-            // Putts
-            totalPutts += hole.putts || 0;
-
-            // Scrambling (missed GIR but still made par or better)
-            if (hole.approachResult && !hole.gir) {
-                scramblingOpportunities++;
-                if (hole.score <= hole.par) {
-                    scramblingSuccess++;
-                }
-            }
-        });
-    });
-
-    document.getElementById('avgScore').textContent = avgScore;
-    document.getElementById('fairwayPct').textContent =
-        fairwayOpportunities > 0 ? Math.round((totalFairways / fairwayOpportunities) * 100) + '%' : '--%';
-    document.getElementById('girPct').textContent =
-        girOpportunities > 0 ? Math.round((totalGir / girOpportunities) * 100) + '%' : '--%';
-    document.getElementById('avgPutts').textContent =
-        rounds.length > 0 ? (totalPutts / rounds.length).toFixed(1) : '--';
-    document.getElementById('scramblingPct').textContent =
-        scramblingOpportunities > 0 ? Math.round((scramblingSuccess / scramblingOpportunities) * 100) + '%' : '--%';
+    document.getElementById('avgScore').textContent = stats.avgScore ?? '--';
+    document.getElementById('fairwayPct').textContent = stats.fairwayPct !== null ? stats.fairwayPct + '%' : '--%';
+    document.getElementById('girPct').textContent = stats.girPct !== null ? stats.girPct + '%' : '--%';
+    document.getElementById('avgPutts').textContent = stats.avgPutts ?? '--';
+    document.getElementById('scramblingPct').textContent = stats.scramblingPct !== null ? stats.scramblingPct + '%' : '--%';
 
     // Calculate handicap
     calculateHandicap();
@@ -482,13 +444,7 @@ function renderDashboard() {
     // Render rounds list
     const sortedRounds = [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date));
     document.getElementById('roundsList').innerHTML = sortedRounds.map(round => {
-        const totalPar = round.holes.reduce((sum, h) => sum + h.par, 0);
-        const diff = round.totalScore - totalPar;
-        const diffStr = diff > 0 ? `+${diff}` : diff === 0 ? 'E' : diff.toString();
-        const putts = round.holes.reduce((sum, h) => sum + (h.putts || 0), 0);
-        const fairways = round.holes.filter(h => h.par > 3 && h.fairwayHit).length;
-        const fairwayTotal = round.holes.filter(h => h.par > 3 && h.fairwayDirection).length;
-        const girs = round.holes.filter(h => h.gir).length;
+        const summary = buildRoundSummary(round);
 
         return `
         <div class="round-item" onclick="viewRound('${round.id}')">
@@ -497,20 +453,20 @@ function renderDashboard() {
                     <div class="round-course">${round.courseName}</div>
                     <div class="round-date">${new Date(round.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                 </div>
-                <div class="round-score">${round.totalScore} <span style="font-size: 1rem; color: var(--text-light);">(${diffStr})</span></div>
+                <div class="round-score">${round.totalScore} <span style="font-size: 1rem; color: var(--text-light);">(${summary.diffStr})</span></div>
             </div>
             <div class="round-stats">
                 <div class="round-stat">
                     <div class="round-stat-label">Putts</div>
-                    <div class="round-stat-value">${putts}</div>
+                    <div class="round-stat-value">${summary.putts}</div>
                 </div>
                 <div class="round-stat">
                     <div class="round-stat-label">Fairways</div>
-                    <div class="round-stat-value">${fairways}/${fairwayTotal}</div>
+                    <div class="round-stat-value">${summary.fairways}/${summary.fairwayTotal}</div>
                 </div>
                 <div class="round-stat">
                     <div class="round-stat-label">GIR</div>
-                    <div class="round-stat-value">${girs}/${round.numHoles || round.holes.length}</div>
+                    <div class="round-stat-value">${summary.girs}/${round.numHoles || round.holes.length}</div>
                 </div>
                 <div class="round-stat">
                     <div class="round-stat-label">Tees</div>
@@ -522,55 +478,16 @@ function renderDashboard() {
 }
 
 function calculateHandicap() {
-    const rounds = appData.rounds.filter(r => r.courseRating && r.slopeRating);
-    if (rounds.length < 3) {
-        document.getElementById('handicapValue').textContent = '--';
-        return;
-    }
-
-    // Calculate differentials
-    const differentials = rounds.map(r => {
-        return ((r.totalScore - r.courseRating) * 113) / r.slopeRating;
-    }).sort((a, b) => a - b);
-
-    // Use best differentials based on number of rounds
-    let numToUse;
-    if (differentials.length >= 20) numToUse = 8;
-    else if (differentials.length >= 17) numToUse = 7;
-    else if (differentials.length >= 14) numToUse = 6;
-    else if (differentials.length >= 11) numToUse = 5;
-    else if (differentials.length >= 8) numToUse = 4;
-    else if (differentials.length >= 6) numToUse = 3;
-    else if (differentials.length >= 4) numToUse = 2;
-    else numToUse = 1;
-
-    const bestDiffs = differentials.slice(0, numToUse);
-    const handicap = (bestDiffs.reduce((a, b) => a + b, 0) / numToUse * 0.96).toFixed(1);
-
-    document.getElementById('handicapValue').textContent = handicap;
+    const handicap = computeHandicap(appData.rounds);
+    document.getElementById('handicapValue').textContent = handicap ?? '--';
 }
 
 function getFilteredRounds() {
-    let rounds = [...appData.rounds];
-
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
-    const filterCount = document.getElementById('filterRounds').value;
+    const count = document.getElementById('filterRounds').value;
 
-    if (startDate) {
-        rounds = rounds.filter(r => r.date >= startDate);
-    }
-    if (endDate) {
-        rounds = rounds.filter(r => r.date <= endDate);
-    }
-
-    rounds.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    if (filterCount !== 'all') {
-        rounds = rounds.slice(0, parseInt(filterCount));
-    }
-
-    return rounds;
+    return filterRounds(appData.rounds, { startDate, endDate, count });
 }
 
 function applyFilters() {
@@ -592,108 +509,63 @@ function showAlert(containerId, message, type) {
 
 // Settings management
 function saveSettings() {
-    appData.settings.apiKey = document.getElementById('apiKey').value;
-    appData.settings.spreadsheetId = document.getElementById('spreadsheetId').value;
+    appData.settings.webAppUrl = document.getElementById('webAppUrl').value.trim();
     saveToLocalStorage();
     showAlert('settingsAlert', 'Settings saved successfully!', 'success');
 }
 
 function loadSettings() {
-    document.getElementById('apiKey').value = appData.settings.apiKey || '';
-    document.getElementById('spreadsheetId').value = appData.settings.spreadsheetId || '';
+    document.getElementById('webAppUrl').value = appData.settings.webAppUrl || '';
 }
 
 function testConnection() {
-    if (!appData.settings.apiKey || !appData.settings.spreadsheetId) {
-        showAlert('settingsAlert', 'Please enter both API key and Spreadsheet ID', 'error');
+    if (!appData.settings.webAppUrl) {
+        showAlert('settingsAlert', 'Please enter your Apps Script Web App URL', 'error');
         return;
     }
     syncFromGoogleSheets();
 }
 
-// Google Sheets sync
+// Google Sheets sync via Apps Script web app
 async function syncToGoogleSheets() {
-    if (!appData.settings.apiKey || !appData.settings.spreadsheetId) return;
+    if (!appData.settings.webAppUrl) return;
 
     try {
-        const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${appData.settings.spreadsheetId}`;
-
-        // Sync courses
-        const courseRows = [['ID', 'Name', 'Location', 'Holes', 'Rating', 'Slope', 'Yardage', 'Hole Data']];
-        appData.courses.forEach(c => {
-            courseRows.push([c.id, c.name, c.location, c.numHoles, c.rating, c.slope, c.totalYardage, JSON.stringify(c.holes)]);
+        const response = await fetch(appData.settings.webAppUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                courses: appData.courses,
+                rounds: appData.rounds
+            })
         });
 
-        await fetch(`${sheetsUrl}/values/Courses!A:H?valueInputOption=RAW`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${appData.settings.apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ values: courseRows })
-        });
-
-        // Sync rounds
-        const roundRows = [['ID', 'Course ID', 'Course Name', 'Date', 'Tees', 'Score', 'Rating', 'Slope', 'Hole Data']];
-        appData.rounds.forEach(r => {
-            roundRows.push([r.id, r.courseId, r.courseName, r.date, r.tees, r.totalScore, r.courseRating, r.slopeRating, JSON.stringify(r.holes)]);
-        });
-
-        await fetch(`${sheetsUrl}/values/Rounds!A:I?valueInputOption=RAW`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${appData.settings.apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ values: roundRows })
-        });
-
+        const result = await response.json();
+        if (!result.success) {
+            console.log('Google Sheets sync failed:', result.error);
+        }
     } catch (error) {
         console.log('Google Sheets sync failed:', error);
     }
 }
 
 async function syncFromGoogleSheets() {
-    if (!appData.settings.apiKey || !appData.settings.spreadsheetId) return;
+    if (!appData.settings.webAppUrl) return;
 
     try {
-        const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${appData.settings.spreadsheetId}`;
+        const response = await fetch(appData.settings.webAppUrl);
+        const result = await response.json();
 
-        // Read courses
-        const coursesRes = await fetch(`${sheetsUrl}/values/Courses!A:H?key=${appData.settings.apiKey}`);
-        if (coursesRes.ok) {
-            const coursesData = await coursesRes.json();
-            if (coursesData.values && coursesData.values.length > 1) {
-                appData.courses = coursesData.values.slice(1).map(row => ({
-                    id: row[0],
-                    name: row[1],
-                    location: row[2],
-                    numHoles: parseInt(row[3]),
-                    rating: parseFloat(row[4]),
-                    slope: parseInt(row[5]),
-                    totalYardage: parseInt(row[6]),
-                    holes: JSON.parse(row[7] || '[]')
-                }));
-            }
+        if (!result.success) {
+            showAlert('settingsAlert', 'Sync failed: ' + result.error, 'error');
+            return;
         }
 
-        // Read rounds
-        const roundsRes = await fetch(`${sheetsUrl}/values/Rounds!A:I?key=${appData.settings.apiKey}`);
-        if (roundsRes.ok) {
-            const roundsData = await roundsRes.json();
-            if (roundsData.values && roundsData.values.length > 1) {
-                appData.rounds = roundsData.values.slice(1).map(row => ({
-                    id: row[0],
-                    courseId: row[1],
-                    courseName: row[2],
-                    date: row[3],
-                    tees: row[4],
-                    totalScore: parseInt(row[5]),
-                    courseRating: parseFloat(row[6]),
-                    slopeRating: parseInt(row[7]),
-                    holes: JSON.parse(row[8] || '[]')
-                }));
-            }
+        if (result.data.courses && result.data.courses.length > 0) {
+            appData.courses = result.data.courses;
+        }
+        if (result.data.rounds && result.data.rounds.length > 0) {
+            appData.rounds = result.data.rounds;
         }
 
         saveToLocalStorage();
