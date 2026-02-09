@@ -1144,6 +1144,120 @@ button.secondary:hover {
     font-size: 0.75rem;
 }
 
+/* Course Detail Modal */
+.modal-content-wide {
+    max-width: 950px;
+}
+
+.course-item-clickable {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.course-item-clickable:hover {
+    background: rgba(74, 124, 89, 0.04);
+}
+
+/* Difficulty ranking items */
+.difficulty-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+}
+
+.difficulty-hard {
+    background: rgba(168, 68, 72, 0.06);
+}
+
+.difficulty-easy {
+    background: rgba(45, 95, 63, 0.06);
+}
+
+.difficulty-rank {
+    font-weight: 700;
+    color: var(--text-light);
+    min-width: 24px;
+}
+
+.difficulty-hole {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.difficulty-par {
+    font-size: 0.75rem;
+    color: var(--text-light);
+}
+
+.difficulty-avg {
+    margin-left: auto;
+    font-family: 'Crimson Pro', serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--forest-green);
+}
+
+.difficulty-vs {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Hole-by-hole stats table */
+.hole-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.hole-stats-table th,
+.hole-stats-table td {
+    padding: 8px 6px;
+    text-align: center;
+    border: 1px solid var(--border);
+}
+
+.hole-stats-table th {
+    background: var(--forest-green);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.hole-stats-table .hole-num-col {
+    font-weight: 700;
+    color: var(--forest-green);
+    background: var(--cream);
+}
+
+.hole-stats-table .hole-stat-avg {
+    font-family: 'Crimson Pro', serif;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.hole-stats-table .hole-stat-distbar {
+    min-width: 120px;
+}
+
+.dist-bar-sm {
+    height: 20px;
+    margin: 0;
+    font-size: 0.6rem;
+}
+
+.miss-dir {
+    font-size: 0.7rem;
+    color: var(--red);
+    font-weight: 600;
+    margin-left: 2px;
+}
+
 @media (max-width: 768px) {
     body {
         padding: 10px;
@@ -1188,5 +1302,21 @@ button.secondary:hover {
 
     .dashboard-section {
         padding: 15px;
+    }
+
+    .modal-content-wide {
+        max-width: 100%;
+    }
+
+    .hole-stats-table {
+        font-size: 0.75rem;
+    }
+
+    .hole-stats-table .hole-stat-distbar {
+        min-width: 80px;
+    }
+
+    .difficulty-item {
+        font-size: 0.78rem;
     }
 }

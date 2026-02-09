@@ -401,7 +401,7 @@ function renderCourseList() {
         }
 
         return `
-        <div class="course-item">
+        <div class="course-item course-item-clickable" onclick="viewCourseDetail('${course.id}')">
             <div class="course-info">
                 <h3>${course.name}</h3>
                 <div class="course-details">
@@ -412,8 +412,8 @@ function renderCourseList() {
                 </div>
             </div>
             <div class="course-actions">
-                <button class="btn-small btn-edit" onclick="editCourse('${course.id}')">Edit</button>
-                <button class="btn-small btn-delete" onclick="deleteCourse('${course.id}')">Delete</button>
+                <button class="btn-small btn-edit" onclick="event.stopPropagation(); editCourse('${course.id}')">Edit</button>
+                <button class="btn-small btn-delete" onclick="event.stopPropagation(); deleteCourse('${course.id}')">Delete</button>
             </div>
         </div>
     `}).join('');
@@ -1140,6 +1140,218 @@ function buildScorecardTable(holes, label) {
 
 function closeRoundModal() {
     document.getElementById('roundModal').classList.remove('active');
+}
+
+// Course Detail Modal
+function viewCourseDetail(courseId) {
+    const course = appData.courses.find(c => c.id === courseId);
+    if (!course) return;
+
+    const stats = computeCourseStats(courseId, appData.rounds, course);
+
+    // Header
+    const numHoles = course.numHoles || course.holes.length;
+    document.getElementById('courseDetailTitle').textContent = course.name;
+    document.getElementById('courseDetailSubtitle').textContent =
+        `${course.location || 'Unknown'} \u2022 ${numHoles} Holes \u2022 Par ${stats.totalPar}`;
+
+    const pct = (v) => v !== null ? v + '%' : '--';
+    const val = (v) => v ?? '--';
+
+    function vsParStr(vsPar) {
+        if (vsPar === null || vsPar === undefined) return '--';
+        const cls = vsPar > 0 ? 'vs-over' : vsPar < 0 ? 'vs-under' : 'vs-even';
+        const sign = vsPar > 0 ? '+' : '';
+        return `<span class="${cls}">${sign}${vsPar}</span>`;
+    }
+
+    // Section 1: Overview
+    const bestStr = stats.bestRound
+        ? `${stats.bestRound.score} <span class="stat-subtext">(${new Date(stats.bestRound.date + 'T00:00').toLocaleDateString()})</span>`
+        : '--';
+    const worstStr = stats.worstRound
+        ? `${stats.worstRound.score} <span class="stat-subtext">(${new Date(stats.worstRound.date + 'T00:00').toLocaleDateString()})</span>`
+        : '--';
+
+    const overviewHtml = `
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Rounds Played</div>
+                <div class="stat-value">${stats.roundsPlayed}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Score</div>
+                <div class="stat-value">${val(stats.avgScore)}</div>
+                <div class="stat-subtext">${vsParStr(stats.vsPar)}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Best Round</div>
+                <div class="stat-value">${bestStr}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Worst Round</div>
+                <div class="stat-value">${worstStr}</div>
+            </div>
+        </div>`;
+
+    // Section 2: Course Performance KPIs
+    const cs = stats.courseStats;
+    const courseKpisHtml = stats.roundsPlayed > 0 ? `
+        <div class="dashboard-section">
+            <h3>Course Performance</h3>
+            <div class="section-stats">
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(cs.fairwayPct)}</div>
+                    <div class="section-stat-label">Fairways</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(cs.girPct)}</div>
+                    <div class="section-stat-label">GIR</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${val(cs.puttsPer9)}</div>
+                    <div class="section-stat-label">Putts / 9</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(cs.scramblingPct)}</div>
+                    <div class="section-stat-label">Scrambling</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(cs.sandSavePct)}</div>
+                    <div class="section-stat-label">Sand Save</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(cs.bogeyAvoidancePct)}</div>
+                    <div class="section-stat-label">Bogey Avoid</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(cs.bounceBackRate)}</div>
+                    <div class="section-stat-label">Bounce-back</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${val(cs.penaltiesPer9)}</div>
+                    <div class="section-stat-label">Penalties / 9</div>
+                </div>
+            </div>
+        </div>` : '';
+
+    // Section 3: Hardest/Easiest Holes
+    let difficultyHtml = '';
+    if (stats.hardestHoles.length > 0) {
+        difficultyHtml = `
+        <div class="dashboard-section">
+            <h3>Hole Difficulty</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--red); text-transform: uppercase; margin-bottom: 8px;">Hardest</div>
+                    ${stats.hardestHoles.map((h, i) => `
+                        <div class="difficulty-item difficulty-hard">
+                            <span class="difficulty-rank">#${i + 1}</span>
+                            <span class="difficulty-hole">Hole ${h.holeNumber}</span>
+                            <span class="difficulty-par">Par ${h.par}</span>
+                            <span class="difficulty-vs">${vsParStr(h.vsPar)}</span>
+                            <span class="difficulty-avg">${h.scoringAvg}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--fairway-green); text-transform: uppercase; margin-bottom: 8px;">Easiest</div>
+                    ${stats.easiestHoles.map((h, i) => `
+                        <div class="difficulty-item difficulty-easy">
+                            <span class="difficulty-rank">#${i + 1}</span>
+                            <span class="difficulty-hole">Hole ${h.holeNumber}</span>
+                            <span class="difficulty-par">Par ${h.par}</span>
+                            <span class="difficulty-vs">${vsParStr(h.vsPar)}</span>
+                            <span class="difficulty-avg">${h.scoringAvg}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Section 4: Hole-by-Hole Breakdown
+    function distBarSm(segments) {
+        const segs = segments.filter(s => s.pct > 0);
+        if (segs.length === 0) return '<div class="dist-bar dist-bar-sm"><div class="dist-segment" style="flex:1;background:var(--cream);color:var(--text-light);">--</div></div>';
+        return '<div class="dist-bar dist-bar-sm">' + segs.map(s =>
+            `<div class="dist-segment ${s.cls}" style="flex:${s.pct}" title="${s.label}">${s.pct >= 15 ? s.pct + '%' : ''}</div>`
+        ).join('') + '</div>';
+    }
+
+    const missArrow = { left: '\u2190', right: '\u2192', long: '\u2191', short: '\u2193' };
+
+    const holeTableRows = stats.holeStats.map(h => {
+        const d = h.distribution;
+        const scoringDistBar = d.total > 0 ? distBarSm([
+            { cls: 'seg-score-eagle', pct: d.eaglePct, label: `Eagle ${d.eaglePct}%` },
+            { cls: 'seg-score-birdie', pct: d.birdiePct, label: `Birdie ${d.birdiePct}%` },
+            { cls: 'seg-score-par', pct: d.parPct, label: `Par ${d.parPct}%` },
+            { cls: 'seg-score-bogey', pct: d.bogeyPct, label: `Bogey ${d.bogeyPct}%` },
+            { cls: 'seg-score-double', pct: d.doublePct, label: `Dbl ${d.doublePct}%` },
+            { cls: 'seg-score-triple', pct: d.triplePct, label: `3+ ${d.triplePct}%` }
+        ]) : '--';
+
+        const fwyStr = h.par <= 3 ? '-' : pct(h.fairwayPct);
+        const fwyMiss = h.fairwayMissDir ? `<span class="miss-dir">${missArrow[h.fairwayMissDir] || ''}</span>` : '';
+        const girStr = pct(h.girPct);
+        const girMiss = h.girMissDir ? `<span class="miss-dir">${missArrow[h.girMissDir] || ''}</span>` : '';
+
+        return `
+        <tr>
+            <td class="hole-num-col">${h.holeNumber}</td>
+            <td>${h.par}</td>
+            <td class="hole-stat-avg">${val(h.scoringAvg)}</td>
+            <td>${vsParStr(h.vsPar)}</td>
+            <td class="hole-stat-distbar">${scoringDistBar}</td>
+            <td>${fwyStr} ${fwyMiss}</td>
+            <td>${girStr} ${girMiss}</td>
+            <td>${val(h.avgPutts)}</td>
+        </tr>`;
+    }).join('');
+
+    const holeTableHtml = stats.roundsPlayed > 0 ? `
+        <div class="dashboard-section">
+            <h3>Hole-by-Hole Breakdown</h3>
+            <div style="overflow-x: auto;">
+                <table class="hole-stats-table">
+                    <thead>
+                        <tr>
+                            <th>Hole</th>
+                            <th>Par</th>
+                            <th>Avg</th>
+                            <th>vs Par</th>
+                            <th>Distribution</th>
+                            <th>FWY</th>
+                            <th>GIR</th>
+                            <th>Putts</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${holeTableRows}
+                    </tbody>
+                </table>
+            </div>
+        </div>` : `
+        <div class="empty-state">
+            <h3>No rounds recorded</h3>
+            <p>Play this course and log a round to see hole-level stats</p>
+        </div>`;
+
+    document.getElementById('courseDetailBody').innerHTML =
+        overviewHtml + courseKpisHtml + difficultyHtml + holeTableHtml;
+
+    // Wire edit button
+    document.getElementById('courseDetailEditBtn').onclick = () => {
+        closeCourseDetailModal();
+        editCourse(courseId);
+    };
+
+    document.getElementById('courseDetailModal').classList.add('active');
+}
+
+function closeCourseDetailModal() {
+    document.getElementById('courseDetailModal').classList.remove('active');
 }
 
 function deleteRound(roundId) {

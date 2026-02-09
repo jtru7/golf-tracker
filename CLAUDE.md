@@ -78,11 +78,13 @@ All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole 
 ### Scoring
 - Scoring avg by par type (par 3 / par 4 / par 5 with vs-par)
 - Scoring distribution bar (Eagle+ / Birdie / Par / Bogey / Double / Triple+)
-- Bounce-back Rate (birdie or better after bogey+)
+- Bounce-back Rate (par or better after bogey+)
 - Penalties per 9
 
 ## Features Implemented
 - **Dashboard with 5 KPI sections**: Overview, Off the Tee, Approach Play, Putting, Scoring — all dynamically rendered with distribution bars
+- **Course Detail Modal**: click a course → modal with course-level KPIs, hole difficulty ranking, and hole-by-hole breakdown table (scoring avg, distribution, fairway %, GIR %, avg putts, miss direction arrows)
+- `computeCourseStats()` in stats.js — per-course and per-hole aggregation, delegates to `computeStats()` for dashboard-style KPIs
 - Round types: Normal, League Match, Casual, Scramble (Normal + League count toward handicap)
 - Editable rounds: click a round → detail modal → Edit button → pre-populated form
 - Multi-tee course setup (Red/White/Blue with per-tee rating, slope, yardage, hole handicaps)
@@ -91,21 +93,6 @@ All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole 
 - Google Sheets sync via Apps Script web app
 - Number input spinners hidden on hole cards to prevent scroll accidents
 - Dashboard filters: date range, last N rounds
-
-## Planned KPIs (Next Phase)
-
-### Course-Level Stats (Courses page)
-- Scoring avg per course (overall and vs par)
-- Best/worst score per course
-- Rounds played count
-- Hardest/easiest holes ranking
-
-### Hole-Level Stats (drill into a course)
-- Scoring avg per hole (and vs par)
-- Scoring distribution per hole
-- Fairway hit % and common miss direction per hole
-- GIR % and common miss direction per hole
-- Avg putts per hole
 
 ## Known Issues / TODOs
 - No data visualization / charts yet (plan: Chart.js)

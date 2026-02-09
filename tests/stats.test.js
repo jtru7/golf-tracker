@@ -311,25 +311,36 @@ describe('computeStats', () => {
 
     // ─── Bounce-back Rate ──────────────────────────────────────
 
-    it('calculates bounce-back rate', () => {
+    it('calculates bounce-back rate (par or better after bogey+)', () => {
         // Default: bogey holes are 1(+1), 5(+1), 6(+1), 8(+1)
-        // After hole 1 → hole 2 (par) = no bounce-back
+        // After hole 1 → hole 2 (par) = bounce-back ✓
         // After hole 5 → hole 6 (bogey) = no bounce-back
-        // After hole 6 → hole 7 (par) = no bounce-back
-        // After hole 8 → hole 9 (par) = no bounce-back
-        // 0 of 4 = 0%
+        // After hole 6 → hole 7 (par) = bounce-back ✓
+        // After hole 8 → hole 9 (par) = bounce-back ✓
+        // 3 of 4 = 75%
         const stats = computeStats([makeRound()]);
-        expect(stats.bounceBackRate).toBe(0);
+        expect(stats.bounceBackRate).toBe(75);
     });
 
-    it('detects bounce-back success', () => {
+    it('detects bounce-back success with birdie', () => {
         const round = makeRound();
         // Hole 2 (after bogey on hole 1): make it a birdie
         round.holes[1].score = 2; // par 3, score 2 = birdie
         round.totalScore = 39;
         const stats = computeStats([round]);
-        // 1 bounce-back out of 4 opportunities
-        expect(stats.bounceBackRate).toBe(25);
+        // Still 3 of 4 (birdie counts too)
+        expect(stats.bounceBackRate).toBe(75);
+    });
+
+    it('does not count bogey after bogey as bounce-back', () => {
+        const round = makeRound();
+        // After hole 5 (bogey) → hole 6 is also bogey = not a bounce-back
+        // Confirm hole 6 is bogey (score 4, par 3 = +1)
+        expect(round.holes[5].score).toBe(4);
+        expect(round.holes[5].par).toBe(3);
+        const stats = computeStats([round]);
+        // 3 of 4 — the one miss is hole 5→6
+        expect(stats.bounceBackRate).toBe(75);
     });
 
     it('returns null bounceBackRate when no bogey+ holes', () => {
