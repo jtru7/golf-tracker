@@ -732,6 +732,7 @@ function renderDashboard() {
     const rounds = getFilteredRounds();
 
     if (rounds.length === 0) {
+        document.getElementById('dashboardContent').innerHTML = '';
         document.getElementById('roundsList').innerHTML = `
             <div class="empty-state">
                 <h3>No rounds recorded yet</h3>
@@ -741,18 +742,218 @@ function renderDashboard() {
         return;
     }
 
-    // Calculate stats using pure function from stats.js
     const stats = computeStats(rounds);
+    const handicap = computeHandicap(appData.rounds);
 
-    document.getElementById('avgScore').textContent = stats.avgScore ?? '--';
-    document.getElementById('fairwayPct').textContent = stats.fairwayPct !== null ? stats.fairwayPct + '%' : '--%';
-    document.getElementById('girPct').textContent = stats.girPct !== null ? stats.girPct + '%' : '--%';
-    document.getElementById('avgPutts').textContent = stats.avgPutts ?? '--';
-    document.getElementById('scramblingPct').textContent = stats.scramblingPct !== null ? stats.scramblingPct + '%' : '--%';
-    document.getElementById('sandSavePct').textContent = stats.sandSavePct !== null ? stats.sandSavePct + '%' : '--%';
+    const pct = (v) => v !== null ? v + '%' : '--';
+    const val = (v) => v ?? '--';
 
-    // Calculate handicap
-    calculateHandicap();
+    // Helper: build a distribution bar from segments [{cls, pct, label}]
+    function distBar(segments) {
+        const segs = segments.filter(s => s.pct > 0);
+        if (segs.length === 0) return '<div class="dist-bar"><div class="dist-segment" style="flex:1;background:var(--cream);color:var(--text-light);">No data</div></div>';
+        return '<div class="dist-bar">' + segs.map(s =>
+            `<div class="dist-segment ${s.cls}" style="flex:${s.pct}">${s.pct >= 8 ? s.label : ''}</div>`
+        ).join('') + '</div>';
+    }
+
+    // Helper: legend items
+    function distLegend(items) {
+        return '<div class="dist-legend">' + items.map(i =>
+            `<div class="dist-legend-item"><span class="dist-legend-dot ${i.cls}"></span>${i.label}: ${i.value}%</div>`
+        ).join('') + '</div>';
+    }
+
+    // Helper: vs-par styling
+    function vsParStr(vsPar) {
+        if (vsPar === null || vsPar === undefined) return '';
+        const cls = vsPar > 0 ? 'vs-over' : vsPar < 0 ? 'vs-under' : 'vs-even';
+        const sign = vsPar > 0 ? '+' : '';
+        return `<span class="${cls}">${sign}${vsPar}</span>`;
+    }
+
+    // ── Section 1: Overview ──
+    const overviewHtml = `
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Handicap Index</div>
+                <div class="stat-value">${val(handicap)}</div>
+                <div class="stat-subtext">USGA Formula</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Score</div>
+                <div class="stat-value">${val(stats.avgScore)}</div>
+                <div class="stat-subtext">Per round</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Bogey Avoidance</div>
+                <div class="stat-value">${pct(stats.bogeyAvoidancePct)}</div>
+                <div class="stat-subtext">Par or better</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Par Conversion</div>
+                <div class="stat-value">${pct(stats.parConversionPct)}</div>
+                <div class="stat-subtext">GIR &rarr; par or better</div>
+            </div>
+        </div>`;
+
+    // ── Section 2: Off the Tee ──
+    const fwy = stats.fairwayDist;
+    const fwyBar = fwy ? distBar([
+        { cls: 'seg-fairway-left', pct: fwy.left, label: `L ${fwy.left}%` },
+        { cls: 'seg-fairway-hit', pct: fwy.hit, label: `Hit ${fwy.hit}%` },
+        { cls: 'seg-fairway-right', pct: fwy.right, label: `R ${fwy.right}%` }
+    ]) : '<div class="dist-bar"><div class="dist-segment" style="flex:1;background:var(--cream);color:var(--text-light);">No data</div></div>';
+    const fwyLegend = fwy ? distLegend([
+        { cls: 'seg-fairway-left', label: 'Left', value: fwy.left },
+        { cls: 'seg-fairway-hit', label: 'Hit', value: fwy.hit },
+        { cls: 'seg-fairway-right', label: 'Right', value: fwy.right }
+    ]) : '';
+    const offTheTeeHtml = `
+        <div class="dashboard-section">
+            <h3>Off the Tee</h3>
+            <div class="section-stats" style="margin-bottom:15px;">
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(stats.fairwayPct)}</div>
+                    <div class="section-stat-label">Fairways Hit</div>
+                </div>
+            </div>
+            ${fwyBar}
+            ${fwyLegend}
+        </div>`;
+
+    // ── Section 3: Approach Play ──
+    const app = stats.approachDist;
+    const appBar = app ? distBar([
+        { cls: 'seg-approach-gir', pct: app.gir, label: `GIR ${app.gir}%` },
+        { cls: 'seg-approach-long', pct: app.long, label: `Long ${app.long}%` },
+        { cls: 'seg-approach-short', pct: app.short, label: `Short ${app.short}%` },
+        { cls: 'seg-approach-left', pct: app.left, label: `Left ${app.left}%` },
+        { cls: 'seg-approach-right', pct: app.right, label: `Right ${app.right}%` }
+    ]) : '<div class="dist-bar"><div class="dist-segment" style="flex:1;background:var(--cream);color:var(--text-light);">No data</div></div>';
+    const appLegend = app ? distLegend([
+        { cls: 'seg-approach-gir', label: 'GIR', value: app.gir },
+        { cls: 'seg-approach-long', label: 'Long', value: app.long },
+        { cls: 'seg-approach-short', label: 'Short', value: app.short },
+        { cls: 'seg-approach-left', label: 'Left', value: app.left },
+        { cls: 'seg-approach-right', label: 'Right', value: app.right }
+    ]) : '';
+    const approachHtml = `
+        <div class="dashboard-section">
+            <h3>Approach Play</h3>
+            <div class="section-stats" style="margin-bottom:15px;">
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(stats.girPct)}</div>
+                    <div class="section-stat-label">Greens in Reg</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${val(stats.avgFirstPuttDist)}${stats.avgFirstPuttDist !== null ? ' ft' : ''}</div>
+                    <div class="section-stat-label">Avg Proximity</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(stats.scramblingPct)}</div>
+                    <div class="section-stat-label">Scrambling</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(stats.sandSavePct)}</div>
+                    <div class="section-stat-label">Sand Save</div>
+                </div>
+            </div>
+            ${appBar}
+            ${appLegend}
+        </div>`;
+
+    // ── Section 4: Putting ──
+    const pb = stats.puttingBreakdown;
+    const pbBar = pb ? distBar([
+        { cls: 'seg-putt-1', pct: pb.onePutt, label: `1-putt ${pb.onePutt}%` },
+        { cls: 'seg-putt-2', pct: pb.twoPutt, label: `2-putt ${pb.twoPutt}%` },
+        { cls: 'seg-putt-3', pct: pb.threePutt, label: `3-putt ${pb.threePutt}%` },
+        { cls: 'seg-putt-3plus', pct: pb.threePlus, label: `3+ ${pb.threePlus}%` }
+    ]) : '<div class="dist-bar"><div class="dist-segment" style="flex:1;background:var(--cream);color:var(--text-light);">No data</div></div>';
+    const pbLegend = pb ? distLegend([
+        { cls: 'seg-putt-1', label: '1-putt', value: pb.onePutt },
+        { cls: 'seg-putt-2', label: '2-putt', value: pb.twoPutt },
+        { cls: 'seg-putt-3', label: '3-putt', value: pb.threePutt },
+        { cls: 'seg-putt-3plus', label: '3+', value: pb.threePlus }
+    ]) : '';
+    const puttingHtml = `
+        <div class="dashboard-section">
+            <h3>Putting</h3>
+            <div class="section-stats" style="margin-bottom:15px;">
+                <div class="section-stat">
+                    <div class="section-stat-value">${val(stats.puttsPer9)}</div>
+                    <div class="section-stat-label">Putts / 9</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${val(stats.feetMadePer9)}${stats.feetMadePer9 !== null ? ' ft' : ''}</div>
+                    <div class="section-stat-label">Ft Made / 9</div>
+                </div>
+            </div>
+            ${pbBar}
+            ${pbLegend}
+        </div>`;
+
+    // ── Section 5: Scoring ──
+    const sbp = stats.scoringByPar;
+    const parScoringHtml = sbp ? `
+        <div class="par-scoring-grid">
+            ${sbp.par3 ? `<div class="par-scoring-card">
+                <div class="par-scoring-type">Par 3</div>
+                <div class="par-scoring-avg">${sbp.par3.avg}</div>
+                <div class="par-scoring-vs">${vsParStr(sbp.par3.vsPar)}</div>
+            </div>` : ''}
+            ${sbp.par4 ? `<div class="par-scoring-card">
+                <div class="par-scoring-type">Par 4</div>
+                <div class="par-scoring-avg">${sbp.par4.avg}</div>
+                <div class="par-scoring-vs">${vsParStr(sbp.par4.vsPar)}</div>
+            </div>` : ''}
+            ${sbp.par5 ? `<div class="par-scoring-card">
+                <div class="par-scoring-type">Par 5</div>
+                <div class="par-scoring-avg">${sbp.par5.avg}</div>
+                <div class="par-scoring-vs">${vsParStr(sbp.par5.vsPar)}</div>
+            </div>` : ''}
+        </div>` : '';
+
+    const sd = stats.scoringDistribution;
+    const sdBar = sd ? distBar([
+        { cls: 'seg-score-eagle', pct: sd.eaglePct, label: `Eagle ${sd.eaglePct}%` },
+        { cls: 'seg-score-birdie', pct: sd.birdiePct, label: `Birdie ${sd.birdiePct}%` },
+        { cls: 'seg-score-par', pct: sd.parPct, label: `Par ${sd.parPct}%` },
+        { cls: 'seg-score-bogey', pct: sd.bogeyPct, label: `Bogey ${sd.bogeyPct}%` },
+        { cls: 'seg-score-double', pct: sd.doublePct, label: `Dbl ${sd.doublePct}%` },
+        { cls: 'seg-score-triple', pct: sd.triplePct, label: `3+ ${sd.triplePct}%` }
+    ]) : '';
+    const sdLegend = sd ? distLegend([
+        { cls: 'seg-score-eagle', label: 'Eagle+', value: sd.eaglePct },
+        { cls: 'seg-score-birdie', label: 'Birdie', value: sd.birdiePct },
+        { cls: 'seg-score-par', label: 'Par', value: sd.parPct },
+        { cls: 'seg-score-bogey', label: 'Bogey', value: sd.bogeyPct },
+        { cls: 'seg-score-double', label: 'Double', value: sd.doublePct },
+        { cls: 'seg-score-triple', label: 'Triple+', value: sd.triplePct }
+    ]) : '';
+
+    const scoringHtml = `
+        <div class="dashboard-section">
+            <h3>Scoring</h3>
+            ${parScoringHtml}
+            ${sd ? '<div style="margin-top:15px;font-size:0.85rem;font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;">Distribution</div>' : ''}
+            ${sdBar}
+            ${sdLegend}
+            <div class="section-stats" style="margin-top:15px;">
+                <div class="section-stat">
+                    <div class="section-stat-value">${pct(stats.bounceBackRate)}</div>
+                    <div class="section-stat-label">Bounce-back</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${val(stats.penaltiesPer9)}</div>
+                    <div class="section-stat-label">Penalties / 9</div>
+                </div>
+            </div>
+        </div>`;
+
+    document.getElementById('dashboardContent').innerHTML =
+        overviewHtml + offTheTeeHtml + approachHtml + puttingHtml + scoringHtml;
 
     // Render rounds list
     const sortedRounds = [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -792,11 +993,6 @@ function renderDashboard() {
             </div>
         </div>
     `}).join('');
-}
-
-function calculateHandicap() {
-    const handicap = computeHandicap(appData.rounds);
-    document.getElementById('handicapValue').textContent = handicap ?? '--';
 }
 
 function getFilteredRounds() {

@@ -571,6 +571,195 @@ button.secondary:hover {
     margin-top: 5px;
 }
 
+/* Dashboard sections */
+.dashboard-section {
+    background: var(--white);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 20px;
+}
+
+.dashboard-section h3 {
+    font-family: 'Crimson Pro', serif;
+    color: var(--forest-green);
+    font-size: 1.2rem;
+    margin: 0 0 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--cream);
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.stat-row + .stat-row {
+    border-top: 1px solid var(--cream);
+}
+
+.stat-row-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+.stat-row-value {
+    font-family: 'Crimson Pro', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--forest-green);
+}
+
+.stat-row-sub {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-left: 6px;
+}
+
+/* Distribution bars */
+.dist-bar {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+    height: 32px;
+    margin: 10px 0;
+    border: 1px solid var(--border);
+}
+
+.dist-segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--white);
+    min-width: 0;
+    transition: flex-basis 0.3s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    padding: 0 4px;
+}
+
+.dist-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: var(--text-light);
+}
+
+.dist-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.dist-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Distribution bar colors */
+.seg-fairway-hit { background: var(--fairway-green); }
+.seg-fairway-left { background: var(--sand); }
+.seg-fairway-right { background: var(--blue); }
+
+.seg-approach-gir { background: var(--fairway-green); }
+.seg-approach-long { background: var(--blue); }
+.seg-approach-short { background: var(--sand); }
+.seg-approach-left { background: #8b6f47; }
+.seg-approach-right { background: var(--grass-light); }
+
+.seg-putt-1 { background: var(--fairway-green); }
+.seg-putt-2 { background: var(--grass-light); }
+.seg-putt-3 { background: var(--sand); }
+.seg-putt-3plus { background: var(--red); }
+
+.seg-score-eagle { background: #d4a017; }
+.seg-score-birdie { background: var(--fairway-green); }
+.seg-score-par { background: var(--grass-light); }
+.seg-score-bogey { background: var(--sand); }
+.seg-score-double { background: var(--red); }
+.seg-score-triple { background: #6b2c2c; }
+
+/* Inline stats grid within sections */
+.section-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.section-stat {
+    text-align: center;
+    padding: 12px 8px;
+    background: var(--cream);
+    border-radius: 6px;
+}
+
+.section-stat-value {
+    font-family: 'Crimson Pro', serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--forest-green);
+    line-height: 1;
+}
+
+.section-stat-label {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+}
+
+/* Scoring by par table */
+.par-scoring-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 10px 0;
+}
+
+.par-scoring-card {
+    text-align: center;
+    padding: 12px;
+    background: var(--cream);
+    border-radius: 6px;
+}
+
+.par-scoring-type {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.par-scoring-avg {
+    font-family: 'Crimson Pro', serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--forest-green);
+    line-height: 1.2;
+}
+
+.par-scoring-vs {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.vs-over { color: var(--red); }
+.vs-under { color: var(--fairway-green); }
+.vs-even { color: var(--text-light); }
+
 .filters {
     display: flex;
     gap: 15px;
@@ -883,7 +1072,7 @@ button.secondary:hover {
     font-family: 'Crimson Pro', serif;
     font-weight: 700;
     font-size: 0.95rem;
-    color: var(--forest-green);
+    color: var(--white);
 }
 
 /* Score shape decorations */
@@ -987,5 +1176,17 @@ button.secondary:hover {
 
     .round-meta-row {
         grid-template-columns: 1fr;
+    }
+
+    .par-scoring-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .section-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dashboard-section {
+        padding: 15px;
     }
 }

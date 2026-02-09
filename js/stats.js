@@ -3,34 +3,73 @@
 
 function computeStats(rounds) {
     if (rounds.length === 0) {
-        return { avgScore: null, fairwayPct: null, girPct: null, avgPutts: null, scramblingPct: null, sandSavePct: null, feetOfPuttsMade: null, avgFirstPuttDist: null };
+        return {
+            avgScore: null, fairwayPct: null, girPct: null, avgPutts: null,
+            scramblingPct: null, sandSavePct: null, feetOfPuttsMade: null, avgFirstPuttDist: null,
+            fairwayDist: null, approachDist: null, puttingBreakdown: null,
+            puttsPer9: null, feetMadePer9: null, penaltiesPer9: null,
+            parConversionPct: null, bogeyAvoidancePct: null, bounceBackRate: null,
+            scoringByPar: null, scoringDistribution: null
+        };
     }
 
     const totalScores = rounds.map(r => r.totalScore);
     const avgScore = parseFloat((totalScores.reduce((a, b) => a + b, 0) / totalScores.length).toFixed(1));
 
     let totalFairways = 0, fairwayOpportunities = 0;
+    let fairwayLeft = 0, fairwayRight = 0;
     let totalGir = 0, girOpportunities = 0;
-    let totalPutts = 0;
+    let approachLong = 0, approachShort = 0, approachLeft = 0, approachRight = 0;
+    let totalPutts = 0, totalHoles = 0, totalPenalties = 0;
     let scramblingSuccess = 0, scramblingOpportunities = 0;
     let sandSaveSuccess = 0, sandSaveOpportunities = 0;
     let totalFeetOfPuttsMade = 0, holesWithMadePuttDist = 0;
     let totalFirstPuttDist = 0, holesWithFirstPuttDist = 0;
+    let onePutt = 0, twoPutt = 0, threePutt = 0, threePlusPutt = 0, holesWithPutts = 0;
+    let parConversionSuccess = 0;
+    let bogeyAvoidanceCount = 0;
+    let bounceBackOpps = 0, bounceBackSuccess = 0;
+    let par3Total = 0, par3Count = 0, par4Total = 0, par4Count = 0, par5Total = 0, par5Count = 0;
+    let eagleOrBetter = 0, birdies = 0, pars = 0, bogeys = 0, doubles = 0, triplePlus = 0;
 
     rounds.forEach(round => {
-        round.holes.forEach(hole => {
+        const holes = round.holes;
+        holes.forEach((hole, idx) => {
+            totalHoles++;
+
+            // Fairway tracking (non-par-3 only)
             if (hole.par > 3 && hole.fairwayDirection) {
                 fairwayOpportunities++;
                 if (hole.fairwayHit) totalFairways++;
+                if (hole.fairwayDirection === 'left') fairwayLeft++;
+                else if (hole.fairwayDirection === 'right') fairwayRight++;
             }
 
+            // Approach tracking
             if (hole.approachResult) {
                 girOpportunities++;
                 if (hole.gir) totalGir++;
+                else if (hole.approachResult === 'long') approachLong++;
+                else if (hole.approachResult === 'short') approachShort++;
+                else if (hole.approachResult === 'left') approachLeft++;
+                else if (hole.approachResult === 'right') approachRight++;
             }
 
-            totalPutts += hole.putts || 0;
+            // Putts
+            const putts = hole.putts || 0;
+            totalPutts += putts;
+            if (putts > 0 || hole.approachResult) {
+                holesWithPutts++;
+                if (putts === 1) onePutt++;
+                else if (putts === 2) twoPutt++;
+                else if (putts === 3) threePutt++;
+                else if (putts > 3) threePlusPutt++;
+            }
 
+            // Penalties
+            totalPenalties += hole.penalties || 0;
+
+            // Scrambling
             if (hole.approachResult && !hole.gir) {
                 scramblingOpportunities++;
                 if (hole.score <= hole.par) {
@@ -38,7 +77,7 @@ function computeStats(rounds) {
                 }
             }
 
-            // Sand save: was in bunker and made par or better
+            // Sand save
             if (hole.bunker || hole.sandSave) {
                 sandSaveOpportunities++;
                 if (hole.score <= hole.par) {
@@ -59,6 +98,37 @@ function computeStats(rounds) {
                     holesWithFirstPuttDist++;
                 }
             }
+
+            // Par conversion (GIR → par or better)
+            if (hole.gir) {
+                if (hole.score <= hole.par) parConversionSuccess++;
+            }
+
+            // Bogey avoidance
+            if (hole.score <= hole.par) bogeyAvoidanceCount++;
+
+            // Scoring by par type
+            if (hole.par === 3) { par3Total += hole.score; par3Count++; }
+            else if (hole.par === 4) { par4Total += hole.score; par4Count++; }
+            else if (hole.par >= 5) { par5Total += hole.score; par5Count++; }
+
+            // Scoring distribution
+            const diff = hole.score - hole.par;
+            if (diff <= -2) eagleOrBetter++;
+            else if (diff === -1) birdies++;
+            else if (diff === 0) pars++;
+            else if (diff === 1) bogeys++;
+            else if (diff === 2) doubles++;
+            else triplePlus++;
+
+            // Bounce-back: after bogey+, next hole birdie or better
+            if (idx > 0) {
+                const prev = holes[idx - 1];
+                if (prev.score > prev.par) {
+                    bounceBackOpps++;
+                    if (hole.score < hole.par) bounceBackSuccess++;
+                }
+            }
         });
     });
 
@@ -70,7 +140,65 @@ function computeStats(rounds) {
         scramblingPct: scramblingOpportunities > 0 ? Math.round((scramblingSuccess / scramblingOpportunities) * 100) : null,
         sandSavePct: sandSaveOpportunities > 0 ? Math.round((sandSaveSuccess / sandSaveOpportunities) * 100) : null,
         feetOfPuttsMade: holesWithMadePuttDist > 0 ? totalFeetOfPuttsMade : null,
-        avgFirstPuttDist: holesWithFirstPuttDist > 0 ? parseFloat((totalFirstPuttDist / holesWithFirstPuttDist).toFixed(1)) : null
+        avgFirstPuttDist: holesWithFirstPuttDist > 0 ? parseFloat((totalFirstPuttDist / holesWithFirstPuttDist).toFixed(1)) : null,
+
+        // Fairway distribution (L/Hit/R percentages)
+        fairwayDist: fairwayOpportunities > 0 ? {
+            left: Math.round((fairwayLeft / fairwayOpportunities) * 100),
+            hit: Math.round((totalFairways / fairwayOpportunities) * 100),
+            right: Math.round((fairwayRight / fairwayOpportunities) * 100)
+        } : null,
+
+        // Approach distribution (GIR/Long/Short/Left/Right percentages)
+        approachDist: girOpportunities > 0 ? {
+            gir: Math.round((totalGir / girOpportunities) * 100),
+            long: Math.round((approachLong / girOpportunities) * 100),
+            short: Math.round((approachShort / girOpportunities) * 100),
+            left: Math.round((approachLeft / girOpportunities) * 100),
+            right: Math.round((approachRight / girOpportunities) * 100)
+        } : null,
+
+        // Putting breakdown (percentages)
+        puttingBreakdown: holesWithPutts > 0 ? {
+            onePutt: Math.round((onePutt / holesWithPutts) * 100),
+            twoPutt: Math.round((twoPutt / holesWithPutts) * 100),
+            threePutt: Math.round((threePutt / holesWithPutts) * 100),
+            threePlus: Math.round((threePlusPutt / holesWithPutts) * 100)
+        } : null,
+
+        // Per-9 normalized stats
+        puttsPer9: totalHoles > 0 ? parseFloat((totalPutts / totalHoles * 9).toFixed(1)) : null,
+        feetMadePer9: holesWithMadePuttDist > 0 ? parseFloat((totalFeetOfPuttsMade / totalHoles * 9).toFixed(1)) : null,
+        penaltiesPer9: totalHoles > 0 ? parseFloat((totalPenalties / totalHoles * 9).toFixed(1)) : null,
+
+        // Par conversion (GIR → par or better)
+        parConversionPct: totalGir > 0 ? Math.round((parConversionSuccess / totalGir) * 100) : null,
+
+        // Bogey avoidance (score ≤ par / total holes)
+        bogeyAvoidancePct: totalHoles > 0 ? Math.round((bogeyAvoidanceCount / totalHoles) * 100) : null,
+
+        // Bounce-back rate (birdie or better after bogey+)
+        bounceBackRate: bounceBackOpps > 0 ? Math.round((bounceBackSuccess / bounceBackOpps) * 100) : null,
+
+        // Scoring by par type
+        scoringByPar: {
+            par3: par3Count > 0 ? { avg: parseFloat((par3Total / par3Count).toFixed(2)), vsPar: parseFloat(((par3Total / par3Count) - 3).toFixed(2)) } : null,
+            par4: par4Count > 0 ? { avg: parseFloat((par4Total / par4Count).toFixed(2)), vsPar: parseFloat(((par4Total / par4Count) - 4).toFixed(2)) } : null,
+            par5: par5Count > 0 ? { avg: parseFloat((par5Total / par5Count).toFixed(2)), vsPar: parseFloat(((par5Total / par5Count) - 5).toFixed(2)) } : null
+        },
+
+        // Scoring distribution (counts and percentages)
+        scoringDistribution: {
+            eagle: eagleOrBetter, birdie: birdies, par: pars,
+            bogey: bogeys, double: doubles, triple: triplePlus,
+            total: totalHoles,
+            eaglePct: totalHoles > 0 ? Math.round((eagleOrBetter / totalHoles) * 100) : 0,
+            birdiePct: totalHoles > 0 ? Math.round((birdies / totalHoles) * 100) : 0,
+            parPct: totalHoles > 0 ? Math.round((pars / totalHoles) * 100) : 0,
+            bogeyPct: totalHoles > 0 ? Math.round((bogeys / totalHoles) * 100) : 0,
+            doublePct: totalHoles > 0 ? Math.round((doubles / totalHoles) * 100) : 0,
+            triplePct: totalHoles > 0 ? Math.round((triplePlus / totalHoles) * 100) : 0
+        }
     };
 }
 

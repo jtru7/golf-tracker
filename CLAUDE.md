@@ -51,17 +51,38 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 - `bunker`: boolean, true if player hit into a bunker on this hole. Sand save % is auto-calculated (score <= par when bunker=true). Old rounds with `sandSave` field are auto-migrated.
 
 ## Current Stats Computed (in `js/stats.js`)
+All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole rounds).
+
+### Overview
 - Handicap Index (USGA: best N of last 20 differentials × 0.96; only normal + league rounds)
 - Average Score
+- Bogey Avoidance % (holes scored par or better / total holes)
+- Par Conversion % (GIR → par or better, measures finishing ability)
+
+### Off the Tee
 - Fairways in Regulation % (non-par-3 holes only)
+- Fairway distribution bar (Left% / Hit% / Right%)
+
+### Approach Play
 - Greens in Regulation %
-- Average Putts per Round
+- Approach distribution bar (GIR% / Long% / Short% / Left% / Right%)
+- Average First Putt Distance (approach proximity)
 - Scrambling % (par or better when missing GIR)
 - Sand Save % (par or better when in bunker)
-- Feet of Putts Made (sum of made putt distances)
-- Average First Putt Distance (approach proximity)
+
+### Putting
+- Putts per 9
+- Putting breakdown bar (1-putt% / 2-putt% / 3-putt% / 3+%)
+- Feet of Putts Made per 9
+
+### Scoring
+- Scoring avg by par type (par 3 / par 4 / par 5 with vs-par)
+- Scoring distribution bar (Eagle+ / Birdie / Par / Bogey / Double / Triple+)
+- Bounce-back Rate (birdie or better after bogey+)
+- Penalties per 9
 
 ## Features Implemented
+- **Dashboard with 5 KPI sections**: Overview, Off the Tee, Approach Play, Putting, Scoring — all dynamically rendered with distribution bars
 - Round types: Normal, League Match, Casual, Scramble (Normal + League count toward handicap)
 - Editable rounds: click a round → detail modal → Edit button → pre-populated form
 - Multi-tee course setup (Red/White/Blue with per-tee rating, slope, yardage, hole handicaps)
@@ -69,24 +90,9 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 - Bunker/sand save tracking per hole
 - Google Sheets sync via Apps Script web app
 - Number input spinners hidden on hole cards to prevent scroll accidents
+- Dashboard filters: date range, last N rounds
 
-## Planned KPIs (Next Phase — Dashboard Build-Out)
-All stats normalized **per 9 holes** (user plays 80-85% 9-hole rounds).
-
-### Dashboard KPIs
-- Fairway distribution (Left%, Hit%, Right%)
-- Approach distribution (GIR%, Long%, Short%, Left%, Right%) — visual breakdown
-- Avg feet to hole on approach (via `puttDistances[0]`)
-- Scrambling % (already exists)
-- Sand save % (already exists)
-- Putting breakdown: 1-putt%, 2-putt%, 3-putt%, 3+-putt%
-- Feet of putts made per 9
-- Par Conversion % (GIR → par or better, measures finishing ability)
-- Bogey Avoidance % (holes scored par or better / total holes)
-- Bounce-back rate (birdie or better after bogey+)
-- Scoring avg by par type (par 3 / par 4 / par 5)
-- Scoring distribution (birdie+, par, bogey, double, triple+)
-- Penalties per 9
+## Planned KPIs (Next Phase)
 
 ### Course-Level Stats (Courses page)
 - Scoring avg per course (overall and vs par)

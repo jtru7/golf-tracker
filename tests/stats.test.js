@@ -182,6 +182,214 @@ describe('computeStats', () => {
         expect(stats.feetOfPuttsMade).toBe(5);
         expect(stats.avgFirstPuttDist).toBe(5);
     });
+
+    // ─── Fairway Distribution ──────────────────────────────────
+
+    it('calculates fairway distribution (L/Hit/R)', () => {
+        // Default round: 7 fairway opportunities (non-par-3 with fairwayDirection)
+        // Hit: 4 (holes 1,4,7,9), Left: 2 (holes 3,8), Right: 1 (hole 5)
+        const stats = computeStats([makeRound()]);
+        expect(stats.fairwayDist).toEqual({
+            left: Math.round((2 / 7) * 100),   // 29%
+            hit: Math.round((4 / 7) * 100),    // 57%
+            right: Math.round((1 / 7) * 100)   // 14%
+        });
+    });
+
+    it('returns null fairwayDist with no fairway opportunities', () => {
+        const round = makeRound();
+        round.holes = round.holes.map(h => ({ ...h, par: 3, fairwayDirection: null, fairwayHit: false }));
+        const stats = computeStats([round]);
+        expect(stats.fairwayDist).toBeNull();
+    });
+
+    // ─── Approach Distribution ─────────────────────────────────
+
+    it('calculates approach distribution', () => {
+        // Default round: 9 approach opportunities
+        // gir: 5 (holes 2,3,4,7,9), short: 2 (holes 1,8), long: 1 (hole 6), right: 1 (hole 5), left: 0
+        const stats = computeStats([makeRound()]);
+        expect(stats.approachDist).toEqual({
+            gir: Math.round((5 / 9) * 100),    // 56%
+            long: Math.round((1 / 9) * 100),   // 11%
+            short: Math.round((2 / 9) * 100),  // 22%
+            left: 0,
+            right: Math.round((1 / 9) * 100)   // 11%
+        });
+    });
+
+    // ─── Putting Breakdown ─────────────────────────────────────
+
+    it('calculates putting breakdown (1/2/3/3+)', () => {
+        // Default round: 9 holes with putts
+        // 1-putt: 2 (holes 2,7), 2-putt: 6 (holes 1,3,4,6,8,9), 3-putt: 1 (hole 5), 3+: 0
+        const stats = computeStats([makeRound()]);
+        expect(stats.puttingBreakdown).toEqual({
+            onePutt: Math.round((2 / 9) * 100),   // 22%
+            twoPutt: Math.round((6 / 9) * 100),   // 67%
+            threePutt: Math.round((1 / 9) * 100),  // 11%
+            threePlus: 0
+        });
+    });
+
+    it('handles 4+ putt hole in putting breakdown', () => {
+        const round = makeRound();
+        round.holes[0].putts = 4; // 4-putt
+        const stats = computeStats([round]);
+        expect(stats.puttingBreakdown.threePlus).toBe(Math.round((1 / 9) * 100)); // 11%
+    });
+
+    // ─── Per-9 Normalized Stats ────────────────────────────────
+
+    it('calculates puttsPer9 for a 9-hole round', () => {
+        // Default: 17 putts over 9 holes → 17 / 9 * 9 = 17.0
+        const stats = computeStats([makeRound()]);
+        expect(stats.puttsPer9).toBe(17);
+    });
+
+    it('calculates puttsPer9 for an 18-hole round', () => {
+        const round = makeRound();
+        // Double the holes to simulate 18
+        round.holes = [...round.holes, ...round.holes.map((h, i) => ({ ...h, number: i + 10 }))];
+        round.numHoles = 18;
+        // 34 putts over 18 holes → 34 / 18 * 9 = 17.0
+        const stats = computeStats([round]);
+        expect(stats.puttsPer9).toBe(17);
+    });
+
+    it('calculates penaltiesPer9', () => {
+        const round = makeRound();
+        round.holes[0].penalties = 1;
+        round.holes[4].penalties = 2;
+        // 3 penalties over 9 holes → 3 / 9 * 9 = 3.0
+        const stats = computeStats([round]);
+        expect(stats.penaltiesPer9).toBe(3);
+    });
+
+    it('calculates feetMadePer9', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [20, 4];  // made=4
+        round.holes[1].puttDistances = [8];       // made=8
+        round.holes[2].puttDistances = [30, 6];   // made=6
+        // 18 feet over 9 holes → 18 / 9 * 9 = 18.0
+        const stats = computeStats([round]);
+        expect(stats.feetMadePer9).toBe(18);
+    });
+
+    // ─── Par Conversion ────────────────────────────────────────
+
+    it('calculates par conversion percentage', () => {
+        // Default round: 5 GIR holes (2,3,4,7,9), all score ≤ par → 100%
+        const stats = computeStats([makeRound()]);
+        expect(stats.parConversionPct).toBe(100);
+    });
+
+    it('calculates par conversion with mixed results', () => {
+        const round = makeRound();
+        // Hole 4 (gir=true, par=4): change score to 5 → missed conversion
+        round.holes[3].score = 5;
+        round.totalScore = 41;
+        const stats = computeStats([round]);
+        // 4 of 5 GIR holes converted
+        expect(stats.parConversionPct).toBe(80);
+    });
+
+    it('returns null parConversionPct with no GIR holes', () => {
+        const round = makeRound();
+        round.holes = round.holes.map(h => ({ ...h, gir: false, approachResult: 'short' }));
+        const stats = computeStats([round]);
+        expect(stats.parConversionPct).toBeNull();
+    });
+
+    // ─── Bogey Avoidance ───────────────────────────────────────
+
+    it('calculates bogey avoidance percentage', () => {
+        // Default round: holes at par or better: 2(3≤3), 3(5≤5), 4(4≤4), 7(4≤4), 9(4≤4) = 5 of 9
+        const stats = computeStats([makeRound()]);
+        expect(stats.bogeyAvoidancePct).toBe(Math.round((5 / 9) * 100)); // 56%
+    });
+
+    // ─── Bounce-back Rate ──────────────────────────────────────
+
+    it('calculates bounce-back rate', () => {
+        // Default: bogey holes are 1(+1), 5(+1), 6(+1), 8(+1)
+        // After hole 1 → hole 2 (par) = no bounce-back
+        // After hole 5 → hole 6 (bogey) = no bounce-back
+        // After hole 6 → hole 7 (par) = no bounce-back
+        // After hole 8 → hole 9 (par) = no bounce-back
+        // 0 of 4 = 0%
+        const stats = computeStats([makeRound()]);
+        expect(stats.bounceBackRate).toBe(0);
+    });
+
+    it('detects bounce-back success', () => {
+        const round = makeRound();
+        // Hole 2 (after bogey on hole 1): make it a birdie
+        round.holes[1].score = 2; // par 3, score 2 = birdie
+        round.totalScore = 39;
+        const stats = computeStats([round]);
+        // 1 bounce-back out of 4 opportunities
+        expect(stats.bounceBackRate).toBe(25);
+    });
+
+    it('returns null bounceBackRate when no bogey+ holes', () => {
+        const round = makeRound();
+        // Make all holes par or better
+        round.holes = round.holes.map(h => ({ ...h, score: h.par }));
+        const stats = computeStats([round]);
+        expect(stats.bounceBackRate).toBeNull();
+    });
+
+    // ─── Scoring by Par Type ───────────────────────────────────
+
+    it('calculates scoring averages by par type', () => {
+        // Default round:
+        // Par 3s: holes 2(3), 6(4) → avg 3.5, vsPar +0.5
+        // Par 4s: holes 1(5), 4(4), 5(5), 7(4), 9(4) → avg 4.4, vsPar +0.4
+        // Par 5s: holes 3(5), 8(6) → avg 5.5, vsPar +0.5
+        const stats = computeStats([makeRound()]);
+        expect(stats.scoringByPar.par3.avg).toBe(3.5);
+        expect(stats.scoringByPar.par3.vsPar).toBe(0.5);
+        expect(stats.scoringByPar.par4.avg).toBe(4.4);
+        expect(stats.scoringByPar.par4.vsPar).toBe(0.4);
+        expect(stats.scoringByPar.par5.avg).toBe(5.5);
+        expect(stats.scoringByPar.par5.vsPar).toBe(0.5);
+    });
+
+    it('returns null for missing par types', () => {
+        const round = makeRound();
+        round.holes = round.holes.map(h => ({ ...h, par: 4 }));
+        const stats = computeStats([round]);
+        expect(stats.scoringByPar.par3).toBeNull();
+        expect(stats.scoringByPar.par4).not.toBeNull();
+        expect(stats.scoringByPar.par5).toBeNull();
+    });
+
+    // ─── Scoring Distribution ──────────────────────────────────
+
+    it('calculates scoring distribution', () => {
+        // Default round:
+        // Eagle+: 0, Birdie: 0, Par: 5 (holes 2,3,4,7,9), Bogey: 4 (holes 1,5,6,8), Double: 0, Triple+: 0
+        const stats = computeStats([makeRound()]);
+        const dist = stats.scoringDistribution;
+        expect(dist.eagle).toBe(0);
+        expect(dist.birdie).toBe(0);
+        expect(dist.par).toBe(5);
+        expect(dist.bogey).toBe(4);
+        expect(dist.double).toBe(0);
+        expect(dist.triple).toBe(0);
+        expect(dist.total).toBe(9);
+        expect(dist.parPct).toBe(Math.round((5 / 9) * 100)); // 56%
+    });
+
+    it('counts eagles and birdies in distribution', () => {
+        const round = makeRound();
+        round.holes[0].score = 2; // par 4 → eagle (-2)
+        round.holes[1].score = 2; // par 3 → birdie (-1)
+        const stats = computeStats([round]);
+        expect(stats.scoringDistribution.eagle).toBe(1);
+        expect(stats.scoringDistribution.birdie).toBe(1);
+    });
 });
 
 // ─── computeHandicap ────────────────────────────────────────
