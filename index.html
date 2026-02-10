@@ -135,6 +135,16 @@
                     </div>
 
                     <div class="card" style="margin-top: 20px;">
+                        <h2>KPI Goals</h2>
+                        <p style="color: var(--text-light); margin-bottom: 20px; font-size: 0.9rem;">
+                            Set personal targets for your KPIs. The threshold controls how sensitive the color coding is. Leave target blank for no goal.
+                        </p>
+                        <div class="goals-grid" id="goalsGrid"></div>
+                        <button class="primary" onclick="saveGoals()" style="margin-top: 20px;">Save Goals</button>
+                        <div id="goalsAlert" style="margin-top: 10px;"></div>
+                    </div>
+
+                    <div class="card" style="margin-top: 20px;">
                         <h2>Data Management</h2>
                         <button class="secondary" onclick="exportData()">Export All Data (JSON)</button>
                         <button class="secondary" onclick="clearAllData()" style="margin-left: 10px; background: var(--red); color: white;">Clear All Data</button>

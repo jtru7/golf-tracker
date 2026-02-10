@@ -409,7 +409,50 @@ function computeCourseStats(courseId, allRounds, course) {
     };
 }
 
+// Reorder an array in place: move item at fromIdx to toIdx
+function reorderArray(arr, fromIdx, toIdx) {
+    if (fromIdx < 0 || fromIdx >= arr.length || toIdx < 0 || toIdx >= arr.length || fromIdx === toIdx) return arr;
+    const [moved] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, moved);
+    return arr;
+}
+
+// KPI goal definitions: direction + default buffer for color thresholds
+const GOAL_DEFS = {
+    avgScore:          { direction: 'lower',  buffer: 5,   label: 'Avg Score', unit: '' },
+    fairwayPct:        { direction: 'higher', buffer: 10,  label: 'Fairways Hit %', unit: '%' },
+    girPct:            { direction: 'higher', buffer: 10,  label: 'GIR %', unit: '%' },
+    avgFirstPuttDist:  { direction: 'lower',  buffer: 5,   label: 'Avg Proximity (ft)', unit: ' ft' },
+    scramblingPct:     { direction: 'higher', buffer: 10,  label: 'Scrambling %', unit: '%' },
+    sandSavePct:       { direction: 'higher', buffer: 10,  label: 'Sand Save %', unit: '%' },
+    bogeyAvoidancePct: { direction: 'higher', buffer: 10,  label: 'Bogey Avoidance %', unit: '%' },
+    parConversionPct:  { direction: 'higher', buffer: 10,  label: 'Par Conversion %', unit: '%' },
+    bounceBackRate:    { direction: 'higher', buffer: 10,  label: 'Bounce-back %', unit: '%' },
+    puttsPer9:         { direction: 'lower',  buffer: 2,   label: 'Putts / 9', unit: '' },
+    feetMadePer9:      { direction: 'higher', buffer: 10,  label: 'Ft Made / 9', unit: ' ft' },
+    penaltiesPer9:     { direction: 'lower',  buffer: 1,   label: 'Penalties / 9', unit: '' },
+    scoringAvgPar3:    { direction: 'lower',  buffer: 0.5, label: 'Par 3 Scoring Avg', unit: '' },
+    scoringAvgPar4:    { direction: 'lower',  buffer: 0.5, label: 'Par 4 Scoring Avg', unit: '' },
+    scoringAvgPar5:    { direction: 'lower',  buffer: 0.5, label: 'Par 5 Scoring Avg', unit: '' },
+};
+
+// Returns goal status: 'far-above' | 'above' | 'below' | 'far-below' | null
+function getGoalStatus(value, target, direction, buffer) {
+    if (value === null || value === undefined || target === null || target === undefined) return null;
+    if (direction === 'higher') {
+        if (value >= target + buffer) return 'far-above';
+        if (value >= target) return 'above';
+        if (value >= target - buffer) return 'below';
+        return 'far-below';
+    } else {
+        if (value <= target - buffer) return 'far-above';
+        if (value <= target) return 'above';
+        if (value <= target + buffer) return 'below';
+        return 'far-below';
+    }
+}
+
 // Export for Vitest (ignored in browser)
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { computeStats, computeHandicap, filterRounds, buildRoundSummary, computeCourseStats };
+    module.exports = { computeStats, computeHandicap, filterRounds, buildRoundSummary, computeCourseStats, reorderArray, GOAL_DEFS, getGoalStatus };
 }

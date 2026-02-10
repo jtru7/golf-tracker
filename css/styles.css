@@ -864,6 +864,11 @@ button.secondary:hover {
     border-color: var(--fairway-green);
 }
 
+.course-info {
+    flex: 1;
+    min-width: 0;
+}
+
 .course-info h3 {
     font-family: 'Crimson Pro', serif;
     color: var(--forest-green);
@@ -1158,6 +1163,36 @@ button.secondary:hover {
     background: rgba(74, 124, 89, 0.04);
 }
 
+/* Drag handle for course reordering */
+.drag-handle {
+    cursor: grab;
+    font-size: 1.1rem;
+    color: var(--text-light);
+    padding: 4px 8px 4px 0;
+    user-select: none;
+    opacity: 0.4;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+.drag-handle:hover {
+    opacity: 0.8;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.course-item.dragging {
+    opacity: 0.4;
+    border-style: dashed;
+}
+
+.course-item.drag-over {
+    border-color: var(--fairway-green);
+    box-shadow: 0 0 0 2px rgba(45, 95, 63, 0.2);
+}
+
 /* Difficulty ranking items */
 .difficulty-item {
     display: flex;
@@ -1256,6 +1291,78 @@ button.secondary:hover {
     color: var(--red);
     font-weight: 600;
     margin-left: 2px;
+}
+
+/* Goal badge on stat cards */
+.stat-goal {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-top: 4px;
+    opacity: 0.7;
+}
+
+/* Goal color backgrounds for .stat-card and .section-stat */
+.goal-far-above {
+    background: rgba(34, 120, 60, 0.12);
+    border-color: rgba(34, 120, 60, 0.3);
+}
+
+.goal-above {
+    background: rgba(74, 160, 100, 0.10);
+    border-color: rgba(74, 160, 100, 0.25);
+}
+
+.goal-below {
+    background: rgba(210, 170, 60, 0.15);
+    border-color: rgba(210, 170, 60, 0.35);
+}
+
+.goal-far-below {
+    background: rgba(168, 68, 72, 0.12);
+    border-color: rgba(168, 68, 72, 0.3);
+}
+
+/* Goals settings form */
+.goals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.goal-input-group {
+    background: var(--cream);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.goal-input-group label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 8px;
+}
+
+.goal-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.goal-input-row input {
+    width: 70px;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.goal-input-row span {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    font-weight: 600;
 }
 
 @media (max-width: 768px) {

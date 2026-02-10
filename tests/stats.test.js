@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { computeStats, computeHandicap, filterRounds, buildRoundSummary } = require('../js/stats.js');
+const { computeStats, computeHandicap, filterRounds, buildRoundSummary, reorderArray, GOAL_DEFS, getGoalStatus } = require('../js/stats.js');
 
 // Helper: create a minimal hole object
 function makeHole(overrides = {}) {
@@ -645,5 +645,141 @@ describe('buildRoundSummary', () => {
         const summary = buildRoundSummary(round);
         expect(summary.bunkerHoles).toBe(0);
         expect(summary.sandSaves).toBe(0);
+    });
+});
+
+// ─── reorderArray ──────────────────────────────────────────
+
+describe('reorderArray', () => {
+    it('moves item forward (lower index to higher)', () => {
+        const arr = ['A', 'B', 'C', 'D'];
+        reorderArray(arr, 0, 2);
+        expect(arr).toEqual(['B', 'C', 'A', 'D']);
+    });
+
+    it('moves item backward (higher index to lower)', () => {
+        const arr = ['A', 'B', 'C', 'D'];
+        reorderArray(arr, 3, 1);
+        expect(arr).toEqual(['A', 'D', 'B', 'C']);
+    });
+
+    it('no-ops when fromIdx equals toIdx', () => {
+        const arr = ['A', 'B', 'C'];
+        reorderArray(arr, 1, 1);
+        expect(arr).toEqual(['A', 'B', 'C']);
+    });
+
+    it('no-ops when index is out of bounds', () => {
+        const arr = ['A', 'B', 'C'];
+        reorderArray(arr, -1, 2);
+        expect(arr).toEqual(['A', 'B', 'C']);
+        reorderArray(arr, 0, 5);
+        expect(arr).toEqual(['A', 'B', 'C']);
+    });
+
+    it('handles moving first to last', () => {
+        const arr = ['A', 'B', 'C', 'D'];
+        reorderArray(arr, 0, 3);
+        expect(arr).toEqual(['B', 'C', 'D', 'A']);
+    });
+
+    it('handles moving last to first', () => {
+        const arr = ['A', 'B', 'C', 'D'];
+        reorderArray(arr, 3, 0);
+        expect(arr).toEqual(['D', 'A', 'B', 'C']);
+    });
+
+    it('preserves array length', () => {
+        const arr = ['A', 'B', 'C', 'D', 'E'];
+        reorderArray(arr, 1, 4);
+        expect(arr).toHaveLength(5);
+    });
+
+    it('works with single-element array', () => {
+        const arr = ['A'];
+        reorderArray(arr, 0, 0);
+        expect(arr).toEqual(['A']);
+    });
+});
+
+// ─── getGoalStatus ─────────────────────────────────────────
+
+describe('getGoalStatus', () => {
+    // Higher-is-better
+    it('returns far-above when well above goal (higher)', () => {
+        expect(getGoalStatus(75, 60, 'higher', 10)).toBe('far-above');
+    });
+
+    it('returns above when at or above goal (higher)', () => {
+        expect(getGoalStatus(63, 60, 'higher', 10)).toBe('above');
+    });
+
+    it('returns above when exactly at goal (higher)', () => {
+        expect(getGoalStatus(60, 60, 'higher', 10)).toBe('above');
+    });
+
+    it('returns below when slightly below goal (higher)', () => {
+        expect(getGoalStatus(55, 60, 'higher', 10)).toBe('below');
+    });
+
+    it('returns far-below when well below goal (higher)', () => {
+        expect(getGoalStatus(40, 60, 'higher', 10)).toBe('far-below');
+    });
+
+    it('edge: exactly at target - buffer is below (higher)', () => {
+        expect(getGoalStatus(50, 60, 'higher', 10)).toBe('below');
+    });
+
+    it('edge: exactly at target + buffer is far-above (higher)', () => {
+        expect(getGoalStatus(70, 60, 'higher', 10)).toBe('far-above');
+    });
+
+    // Lower-is-better
+    it('returns far-above when well below goal (lower)', () => {
+        expect(getGoalStatus(13, 16, 'lower', 2)).toBe('far-above');
+    });
+
+    it('returns above when at or below goal (lower)', () => {
+        expect(getGoalStatus(15.5, 16, 'lower', 2)).toBe('above');
+    });
+
+    it('returns below when slightly above goal (lower)', () => {
+        expect(getGoalStatus(17, 16, 'lower', 2)).toBe('below');
+    });
+
+    it('returns far-below when well above goal (lower)', () => {
+        expect(getGoalStatus(19, 16, 'lower', 2)).toBe('far-below');
+    });
+
+    // Null handling
+    it('returns null when value is null', () => {
+        expect(getGoalStatus(null, 60, 'higher', 10)).toBeNull();
+    });
+
+    it('returns null when target is null', () => {
+        expect(getGoalStatus(55, null, 'higher', 10)).toBeNull();
+    });
+
+    it('returns null when value is undefined', () => {
+        expect(getGoalStatus(undefined, 60, 'higher', 10)).toBeNull();
+    });
+});
+
+// ─── GOAL_DEFS ─────────────────────────────────────────────
+
+describe('GOAL_DEFS', () => {
+    it('has definitions for all 15 goal-eligible KPIs', () => {
+        expect(Object.keys(GOAL_DEFS)).toHaveLength(15);
+    });
+
+    it('all entries have required fields', () => {
+        for (const [key, def] of Object.entries(GOAL_DEFS)) {
+            expect(def).toHaveProperty('direction');
+            expect(def).toHaveProperty('buffer');
+            expect(def).toHaveProperty('label');
+            expect(def).toHaveProperty('unit');
+            expect(['higher', 'lower']).toContain(def.direction);
+            expect(def.buffer).toBeGreaterThan(0);
+        }
     });
 });

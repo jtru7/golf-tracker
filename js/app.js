@@ -382,7 +382,7 @@ function renderCourseList() {
         return;
     }
 
-    container.innerHTML = appData.courses.map(course => {
+    container.innerHTML = appData.courses.map((course, idx) => {
         const numHoles = course.numHoles || course.holes.length;
         const totalPar = course.holes.reduce((sum, h) => sum + h.par, 0);
 
@@ -401,7 +401,8 @@ function renderCourseList() {
         }
 
         return `
-        <div class="course-item course-item-clickable" onclick="viewCourseDetail('${course.id}')">
+        <div class="course-item course-item-clickable" draggable="true" data-course-idx="${idx}" onclick="viewCourseDetail('${course.id}')">
+            <div class="drag-handle" title="Drag to reorder">&#x2630;</div>
             <div class="course-info">
                 <h3>${course.name}</h3>
                 <div class="course-details">
@@ -417,6 +418,63 @@ function renderCourseList() {
             </div>
         </div>
     `}).join('');
+
+    // Wire up drag-and-drop reordering
+    initCourseDragDrop();
+}
+
+function reorderCourses(fromIdx, toIdx) {
+    reorderArray(appData.courses, fromIdx, toIdx);
+    saveToLocalStorage();
+}
+
+function initCourseDragDrop() {
+    const container = document.getElementById('courseList');
+    const items = container.querySelectorAll('.course-item[draggable]');
+    let dragIdx = null;
+
+    // Prevent browser default drop on the container (avoids nesting)
+    container.addEventListener('dragover', (e) => { e.preventDefault(); });
+    container.addEventListener('drop', (e) => { e.preventDefault(); });
+
+    items.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            dragIdx = parseInt(item.dataset.courseIdx);
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', '');
+        });
+
+        item.addEventListener('dragend', () => {
+            // Always re-render to guarantee a clean DOM
+            renderCourseList();
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
+            const targetIdx = parseInt(item.dataset.courseIdx);
+            if (targetIdx !== dragIdx) {
+                container.querySelectorAll('.course-item').forEach(el => el.classList.remove('drag-over'));
+                item.classList.add('drag-over');
+            }
+        });
+
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const targetIdx = parseInt(item.dataset.courseIdx);
+            if (dragIdx !== null && dragIdx !== targetIdx) {
+                reorderCourses(dragIdx, targetIdx);
+            }
+            // dragend will fire next and re-render
+        });
+    });
 }
 
 function loadCourseSelect() {
@@ -772,7 +830,24 @@ function renderDashboard() {
         return `<span class="${cls}">${sign}${vsPar}</span>`;
     }
 
+    // Helper: goal badge + color class for a KPI
+    function goalBadge(key, value) {
+        const goals = appData.settings.goals || {};
+        const goal = goals[key];
+        const def = GOAL_DEFS[key];
+        if (!goal || goal.target === undefined || goal.target === null || !def) return { cls: '', badge: '' };
+        const buffer = goal.buffer !== undefined ? goal.buffer : def.buffer;
+        const status = getGoalStatus(value, goal.target, def.direction, buffer);
+        if (!status) return { cls: '', badge: '' };
+        const cls = 'goal-' + status;
+        const badge = `<div class="stat-goal">Goal: ${goal.target}${def.unit}</div>`;
+        return { cls, badge };
+    }
+
     // ── Section 1: Overview ──
+    const asGoal = goalBadge('avgScore', stats.avgScore);
+    const baGoal = goalBadge('bogeyAvoidancePct', stats.bogeyAvoidancePct);
+    const pcGoal = goalBadge('parConversionPct', stats.parConversionPct);
     const overviewHtml = `
         <div class="stats-grid">
             <div class="stat-card">
@@ -780,20 +855,23 @@ function renderDashboard() {
                 <div class="stat-value">${val(handicap)}</div>
                 <div class="stat-subtext">USGA Formula</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card ${asGoal.cls}">
                 <div class="stat-label">Avg Score</div>
                 <div class="stat-value">${val(stats.avgScore)}</div>
                 <div class="stat-subtext">Per round</div>
+                ${asGoal.badge}
             </div>
-            <div class="stat-card">
+            <div class="stat-card ${baGoal.cls}">
                 <div class="stat-label">Bogey Avoidance</div>
                 <div class="stat-value">${pct(stats.bogeyAvoidancePct)}</div>
                 <div class="stat-subtext">Par or better</div>
+                ${baGoal.badge}
             </div>
-            <div class="stat-card">
+            <div class="stat-card ${pcGoal.cls}">
                 <div class="stat-label">Par Conversion</div>
                 <div class="stat-value">${pct(stats.parConversionPct)}</div>
                 <div class="stat-subtext">GIR &rarr; par or better</div>
+                ${pcGoal.badge}
             </div>
         </div>`;
 
@@ -809,13 +887,15 @@ function renderDashboard() {
         { cls: 'seg-fairway-hit', label: 'Hit', value: fwy.hit },
         { cls: 'seg-fairway-right', label: 'Right', value: fwy.right }
     ]) : '';
+    const fwyGoal = goalBadge('fairwayPct', stats.fairwayPct);
     const offTheTeeHtml = `
         <div class="dashboard-section">
             <h3>Off the Tee</h3>
             <div class="section-stats" style="margin-bottom:15px;">
-                <div class="section-stat">
+                <div class="section-stat ${fwyGoal.cls}">
                     <div class="section-stat-value">${pct(stats.fairwayPct)}</div>
                     <div class="section-stat-label">Fairways Hit</div>
+                    ${fwyGoal.badge}
                 </div>
             </div>
             ${fwyBar}
@@ -838,25 +918,33 @@ function renderDashboard() {
         { cls: 'seg-approach-left', label: 'Left', value: app.left },
         { cls: 'seg-approach-right', label: 'Right', value: app.right }
     ]) : '';
+    const girGoal = goalBadge('girPct', stats.girPct);
+    const proxGoal = goalBadge('avgFirstPuttDist', stats.avgFirstPuttDist);
+    const scrGoal = goalBadge('scramblingPct', stats.scramblingPct);
+    const ssGoal = goalBadge('sandSavePct', stats.sandSavePct);
     const approachHtml = `
         <div class="dashboard-section">
             <h3>Approach Play</h3>
             <div class="section-stats" style="margin-bottom:15px;">
-                <div class="section-stat">
+                <div class="section-stat ${girGoal.cls}">
                     <div class="section-stat-value">${pct(stats.girPct)}</div>
                     <div class="section-stat-label">Greens in Reg</div>
+                    ${girGoal.badge}
                 </div>
-                <div class="section-stat">
+                <div class="section-stat ${proxGoal.cls}">
                     <div class="section-stat-value">${val(stats.avgFirstPuttDist)}${stats.avgFirstPuttDist !== null ? ' ft' : ''}</div>
                     <div class="section-stat-label">Avg Proximity</div>
+                    ${proxGoal.badge}
                 </div>
-                <div class="section-stat">
+                <div class="section-stat ${scrGoal.cls}">
                     <div class="section-stat-value">${pct(stats.scramblingPct)}</div>
                     <div class="section-stat-label">Scrambling</div>
+                    ${scrGoal.badge}
                 </div>
-                <div class="section-stat">
+                <div class="section-stat ${ssGoal.cls}">
                     <div class="section-stat-value">${pct(stats.sandSavePct)}</div>
                     <div class="section-stat-label">Sand Save</div>
+                    ${ssGoal.badge}
                 </div>
             </div>
             ${appBar}
@@ -877,17 +965,21 @@ function renderDashboard() {
         { cls: 'seg-putt-3', label: '3-putt', value: pb.threePutt },
         { cls: 'seg-putt-3plus', label: '3+', value: pb.threePlus }
     ]) : '';
+    const putGoal = goalBadge('puttsPer9', stats.puttsPer9);
+    const ftGoal = goalBadge('feetMadePer9', stats.feetMadePer9);
     const puttingHtml = `
         <div class="dashboard-section">
             <h3>Putting</h3>
             <div class="section-stats" style="margin-bottom:15px;">
-                <div class="section-stat">
+                <div class="section-stat ${putGoal.cls}">
                     <div class="section-stat-value">${val(stats.puttsPer9)}</div>
                     <div class="section-stat-label">Putts / 9</div>
+                    ${putGoal.badge}
                 </div>
-                <div class="section-stat">
+                <div class="section-stat ${ftGoal.cls}">
                     <div class="section-stat-value">${val(stats.feetMadePer9)}${stats.feetMadePer9 !== null ? ' ft' : ''}</div>
                     <div class="section-stat-label">Ft Made / 9</div>
+                    ${ftGoal.badge}
                 </div>
             </div>
             ${pbBar}
@@ -896,22 +988,28 @@ function renderDashboard() {
 
     // ── Section 5: Scoring ──
     const sbp = stats.scoringByPar;
+    const p3Goal = sbp && sbp.par3 ? goalBadge('scoringAvgPar3', sbp.par3.avg) : { cls: '', badge: '' };
+    const p4Goal = sbp && sbp.par4 ? goalBadge('scoringAvgPar4', sbp.par4.avg) : { cls: '', badge: '' };
+    const p5Goal = sbp && sbp.par5 ? goalBadge('scoringAvgPar5', sbp.par5.avg) : { cls: '', badge: '' };
     const parScoringHtml = sbp ? `
         <div class="par-scoring-grid">
-            ${sbp.par3 ? `<div class="par-scoring-card">
+            ${sbp.par3 ? `<div class="par-scoring-card ${p3Goal.cls}">
                 <div class="par-scoring-type">Par 3</div>
                 <div class="par-scoring-avg">${sbp.par3.avg}</div>
                 <div class="par-scoring-vs">${vsParStr(sbp.par3.vsPar)}</div>
+                ${p3Goal.badge}
             </div>` : ''}
-            ${sbp.par4 ? `<div class="par-scoring-card">
+            ${sbp.par4 ? `<div class="par-scoring-card ${p4Goal.cls}">
                 <div class="par-scoring-type">Par 4</div>
                 <div class="par-scoring-avg">${sbp.par4.avg}</div>
                 <div class="par-scoring-vs">${vsParStr(sbp.par4.vsPar)}</div>
+                ${p4Goal.badge}
             </div>` : ''}
-            ${sbp.par5 ? `<div class="par-scoring-card">
+            ${sbp.par5 ? `<div class="par-scoring-card ${p5Goal.cls}">
                 <div class="par-scoring-type">Par 5</div>
                 <div class="par-scoring-avg">${sbp.par5.avg}</div>
                 <div class="par-scoring-vs">${vsParStr(sbp.par5.vsPar)}</div>
+                ${p5Goal.badge}
             </div>` : ''}
         </div>` : '';
 
@@ -933,6 +1031,8 @@ function renderDashboard() {
         { cls: 'seg-score-triple', label: 'Triple+', value: sd.triplePct }
     ]) : '';
 
+    const bbGoal = goalBadge('bounceBackRate', stats.bounceBackRate);
+    const penGoal = goalBadge('penaltiesPer9', stats.penaltiesPer9);
     const scoringHtml = `
         <div class="dashboard-section">
             <h3>Scoring</h3>
@@ -941,13 +1041,19 @@ function renderDashboard() {
             ${sdBar}
             ${sdLegend}
             <div class="section-stats" style="margin-top:15px;">
-                <div class="section-stat">
+                <div class="section-stat ${bbGoal.cls}">
                     <div class="section-stat-value">${pct(stats.bounceBackRate)}</div>
                     <div class="section-stat-label">Bounce-back</div>
+                    ${bbGoal.badge}
                 </div>
                 <div class="section-stat">
+                    <div class="section-stat-value">${sd ? sd.birdie : '—'}</div>
+                    <div class="section-stat-label">Total Birdies</div>
+                </div>
+                <div class="section-stat ${penGoal.cls}">
                     <div class="section-stat-value">${val(stats.penaltiesPer9)}</div>
                     <div class="section-stat-label">Penalties / 9</div>
+                    ${penGoal.badge}
                 </div>
             </div>
         </div>`;
@@ -1459,6 +1565,46 @@ function saveSettings() {
 
 function loadSettings() {
     document.getElementById('webAppUrl').value = appData.settings.webAppUrl || '';
+    renderGoalsForm();
+}
+
+function renderGoalsForm() {
+    const goals = appData.settings.goals || {};
+    const grid = document.getElementById('goalsGrid');
+    grid.innerHTML = Object.entries(GOAL_DEFS).map(([key, def]) => {
+        const goal = goals[key] || {};
+        const targetVal = goal.target !== undefined && goal.target !== null ? goal.target : '';
+        const bufferVal = goal.buffer !== undefined ? goal.buffer : def.buffer;
+        return `
+        <div class="goal-input-group">
+            <label>${def.label}</label>
+            <div class="goal-input-row">
+                <span>Target</span>
+                <input type="number" id="goalTarget_${key}" value="${targetVal}" placeholder="e.g. ${def.direction === 'higher' ? '60' : '16'}" step="any">
+                <span>Threshold</span>
+                <input type="number" id="goalBuffer_${key}" value="${bufferVal}" step="any">
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function saveGoals() {
+    const goals = {};
+    Object.entries(GOAL_DEFS).forEach(([key, def]) => {
+        const targetInput = document.getElementById(`goalTarget_${key}`);
+        const bufferInput = document.getElementById(`goalBuffer_${key}`);
+        const target = targetInput.value.trim();
+        const buffer = bufferInput.value.trim();
+        if (target !== '') {
+            goals[key] = {
+                target: parseFloat(target),
+                buffer: buffer !== '' ? parseFloat(buffer) : def.buffer
+            };
+        }
+    });
+    appData.settings.goals = goals;
+    saveToLocalStorage();
+    showAlert('goalsAlert', 'Goals saved!', 'success');
 }
 
 function testConnection() {
