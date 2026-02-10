@@ -401,6 +401,150 @@ describe('computeStats', () => {
         expect(stats.scoringDistribution.eagle).toBe(1);
         expect(stats.scoringDistribution.birdie).toBe(1);
     });
+
+    // ─── Putt Make Rate by Distance ─────────────────────────────
+
+    it('classifies a made putt into correct bucket', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [4]; // 1-putt from 4ft → 3-6ft bucket, made
+        const stats = computeStats([round]);
+        const bucket = stats.puttMakeRate.find(b => b.label === '3-6 ft');
+        expect(bucket.attempts).toBe(1);
+        expect(bucket.made).toBe(1);
+        expect(bucket.pct).toBe(100);
+    });
+
+    it('classifies missed and made putts into separate buckets', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [20, 4]; // miss from 20ft, make from 4ft
+        const stats = computeStats([round]);
+        const long = stats.puttMakeRate.find(b => b.label === '20+ ft');
+        expect(long.attempts).toBe(1);
+        expect(long.made).toBe(0);
+        expect(long.pct).toBe(0);
+        const short = stats.puttMakeRate.find(b => b.label === '3-6 ft');
+        expect(short.attempts).toBe(1);
+        expect(short.made).toBe(1);
+    });
+
+    it('accumulates across multiple holes', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [8];  // make from 8ft → 6-10 bucket
+        round.holes[1].puttDistances = [7];  // make from 7ft → 6-10 bucket
+        round.holes[2].puttDistances = [9, 2]; // miss 9ft, make 2ft
+        const stats = computeStats([round]);
+        const mid = stats.puttMakeRate.find(b => b.label === '6-10 ft');
+        expect(mid.attempts).toBe(3); // 8ft + 7ft + 9ft
+        expect(mid.made).toBe(2);     // 8ft + 7ft
+        expect(mid.pct).toBe(67);
+        const tap = stats.puttMakeRate.find(b => b.label === 'Inside 3 ft');
+        expect(tap.attempts).toBe(1);
+        expect(tap.made).toBe(1);
+    });
+
+    it('returns null puttMakeRate when no puttDistances data', () => {
+        const round = makeRound(); // no puttDistances on any hole by default
+        const stats = computeStats([round]);
+        expect(stats.puttMakeRate).toBeNull();
+    });
+
+    it('skips null distances in puttDistances array', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [null, 3]; // null missed putt, make from 3ft
+        const stats = computeStats([round]);
+        const bucket = stats.puttMakeRate.find(b => b.label === '3-6 ft');
+        expect(bucket.attempts).toBe(1);
+        expect(bucket.made).toBe(1);
+    });
+
+    it('handles boundary: 3ft goes into 3-6 bucket', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [3]; // exactly 3ft → 3-6 bucket
+        const stats = computeStats([round]);
+        expect(stats.puttMakeRate.find(b => b.label === 'Inside 3 ft').attempts).toBe(0);
+        expect(stats.puttMakeRate.find(b => b.label === '3-6 ft').attempts).toBe(1);
+    });
+
+    it('handles boundary: 20ft goes into 20+ bucket', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [20]; // exactly 20ft → 20+ bucket
+        const stats = computeStats([round]);
+        expect(stats.puttMakeRate.find(b => b.label === '15-20 ft').attempts).toBe(0);
+        expect(stats.puttMakeRate.find(b => b.label === '20+ ft').attempts).toBe(1);
+    });
+
+    it('chip-in (empty puttDistances) does not affect buckets', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [];
+        round.holes[1].puttDistances = [5]; // one real putt
+        const stats = computeStats([round]);
+        const total = stats.puttMakeRate.reduce((sum, b) => sum + b.attempts, 0);
+        expect(total).toBe(1);
+    });
+
+    // ─── Lag Putting ────────────────────────────────────────────
+
+    it('counts 3-putt avoidance on lag putts', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [25, 3]; // lag from 25ft, leave 3ft, 2 putts → avoided
+        round.holes[0].putts = 2;
+        round.holes[1].puttDistances = [30, 8, 1]; // lag from 30ft, 3 putts → NOT avoided
+        round.holes[1].putts = 3;
+        const stats = computeStats([round]);
+        expect(stats.lagPutt3PuttAvoidPct).toBe(50); // 1 of 2
+        expect(stats.lagPuttCount).toBe(2);
+    });
+
+    it('calculates avg lag leave distance', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [25, 4]; // leave = 4ft
+        round.holes[0].putts = 2;
+        round.holes[1].puttDistances = [30, 6]; // leave = 6ft
+        round.holes[1].putts = 2;
+        const stats = computeStats([round]);
+        expect(stats.lagPuttAvgLeave).toBe(5.0); // (4 + 6) / 2
+    });
+
+    it('ignores holes where first putt < 20ft for lag stats', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [15, 3]; // NOT a lag putt
+        round.holes[0].putts = 2;
+        round.holes[1].puttDistances = [22, 4]; // lag putt
+        round.holes[1].putts = 2;
+        const stats = computeStats([round]);
+        expect(stats.lagPuttCount).toBe(1);
+        expect(stats.lagPuttAvgLeave).toBe(4.0);
+    });
+
+    it('returns null lag stats when no lag putt opportunities', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [10, 3]; // not a lag putt
+        round.holes[0].putts = 2;
+        const stats = computeStats([round]);
+        expect(stats.lagPutt3PuttAvoidPct).toBeNull();
+        expect(stats.lagPuttAvgLeave).toBeNull();
+        expect(stats.lagPuttCount).toBe(0);
+    });
+
+    it('edge: first putt exactly 20ft counts as lag putt', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [20, 2]; // exactly 20ft → lag
+        round.holes[0].putts = 2;
+        const stats = computeStats([round]);
+        expect(stats.lagPuttCount).toBe(1);
+        expect(stats.lagPutt3PuttAvoidPct).toBe(100);
+        expect(stats.lagPuttAvgLeave).toBe(2.0);
+    });
+
+    it('handles lag putt with 1 putt (made from 20+)', () => {
+        const round = makeRound();
+        round.holes[0].puttDistances = [25]; // made from 25ft, 1 putt
+        round.holes[0].putts = 1;
+        const stats = computeStats([round]);
+        expect(stats.lagPuttCount).toBe(1);
+        expect(stats.lagPutt3PuttAvoidPct).toBe(100);
+        expect(stats.lagPuttAvgLeave).toBeNull(); // no second putt to measure
+    });
 });
 
 // ─── computeHandicap ────────────────────────────────────────
@@ -768,8 +912,8 @@ describe('getGoalStatus', () => {
 // ─── GOAL_DEFS ─────────────────────────────────────────────
 
 describe('GOAL_DEFS', () => {
-    it('has definitions for all 15 goal-eligible KPIs', () => {
-        expect(Object.keys(GOAL_DEFS)).toHaveLength(15);
+    it('has definitions for all 16 goal-eligible KPIs', () => {
+        expect(Object.keys(GOAL_DEFS)).toHaveLength(16);
     });
 
     it('all entries have required fields', () => {

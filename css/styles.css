@@ -1293,6 +1293,60 @@ button.secondary:hover {
     margin-left: 2px;
 }
 
+/* Putt make rate table */
+.putt-rate-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-top: 10px;
+}
+
+.putt-rate-table th {
+    background: var(--forest-green);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 8px 6px;
+    text-align: center;
+}
+
+.putt-rate-table td {
+    padding: 8px 6px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.putt-rate-table .rate-label {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.putt-rate-table .rate-pct {
+    font-family: 'Crimson Pro', serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--forest-green);
+}
+
+.putt-rate-table .rate-count {
+    font-size: 0.75rem;
+    color: var(--text-light);
+}
+
+/* Putting sub-section headers */
+.putting-subheader {
+    font-family: 'Crimson Pro', serif;
+    color: var(--text-dark);
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 20px 0 5px;
+    padding-top: 15px;
+    border-top: 1px solid var(--cream);
+}
+
 /* Goal badge on stat cards */
 .stat-goal {
     font-size: 0.65rem;

@@ -847,7 +847,6 @@ function renderDashboard() {
     // ── Section 1: Overview ──
     const asGoal = goalBadge('avgScore', stats.avgScore);
     const baGoal = goalBadge('bogeyAvoidancePct', stats.bogeyAvoidancePct);
-    const pcGoal = goalBadge('parConversionPct', stats.parConversionPct);
     const overviewHtml = `
         <div class="stats-grid">
             <div class="stat-card">
@@ -866,12 +865,6 @@ function renderDashboard() {
                 <div class="stat-value">${pct(stats.bogeyAvoidancePct)}</div>
                 <div class="stat-subtext">Par or better</div>
                 ${baGoal.badge}
-            </div>
-            <div class="stat-card ${pcGoal.cls}">
-                <div class="stat-label">Par Conversion</div>
-                <div class="stat-value">${pct(stats.parConversionPct)}</div>
-                <div class="stat-subtext">GIR &rarr; par or better</div>
-                ${pcGoal.badge}
             </div>
         </div>`;
 
@@ -967,6 +960,34 @@ function renderDashboard() {
     ]) : '';
     const putGoal = goalBadge('puttsPer9', stats.puttsPer9);
     const ftGoal = goalBadge('feetMadePer9', stats.feetMadePer9);
+    const pcGoal = goalBadge('parConversionPct', stats.parConversionPct);
+    const lagAvoidGoal = goalBadge('lagPutt3PuttAvoidPct', stats.lagPutt3PuttAvoidPct);
+    const lagHtml = stats.lagPutt3PuttAvoidPct !== null ? `
+            <div class="putting-subheader">Lag Putting (20+ ft)${stats.lagPuttCount ? ` <span style="font-size:0.75rem;font-weight:400;color:var(--text-light);">${stats.lagPuttCount} putts</span>` : ''}</div>
+            <div class="section-stats" style="margin-bottom:15px;">
+                <div class="section-stat ${lagAvoidGoal.cls}">
+                    <div class="section-stat-value">${pct(stats.lagPutt3PuttAvoidPct)}</div>
+                    <div class="section-stat-label">3-Putt Avoidance</div>
+                    ${lagAvoidGoal.badge}
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${val(stats.lagPuttAvgLeave)}${stats.lagPuttAvgLeave !== null ? ' ft' : ''}</div>
+                    <div class="section-stat-label">Avg Lag Leave</div>
+                </div>
+            </div>` : '';
+    const makeRateHtml = stats.puttMakeRate ? `
+            <div class="putting-subheader">Make Rate by Distance</div>
+            <table class="putt-rate-table">
+                <thead><tr><th>Range</th><th>Putts</th><th>Made</th><th>Make %</th></tr></thead>
+                <tbody>
+                    ${stats.puttMakeRate.map(b => `<tr>
+                        <td class="rate-label">${b.label}</td>
+                        <td class="rate-count">${b.attempts}</td>
+                        <td class="rate-count">${b.made}</td>
+                        <td class="rate-pct">${b.attempts > 0 ? b.pct + '%' : '—'}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>` : '';
     const puttingHtml = `
         <div class="dashboard-section">
             <h3>Putting</h3>
@@ -981,9 +1002,16 @@ function renderDashboard() {
                     <div class="section-stat-label">Ft Made / 9</div>
                     ${ftGoal.badge}
                 </div>
+                <div class="section-stat ${pcGoal.cls}">
+                    <div class="section-stat-value">${pct(stats.parConversionPct)}</div>
+                    <div class="section-stat-label">Par Conversion</div>
+                    ${pcGoal.badge}
+                </div>
             </div>
             ${pbBar}
             ${pbLegend}
+            ${lagHtml}
+            ${makeRateHtml}
         </div>`;
 
     // ── Section 5: Scoring ──
@@ -1061,12 +1089,20 @@ function renderDashboard() {
     document.getElementById('dashboardContent').innerHTML =
         overviewHtml + offTheTeeHtml + approachHtml + puttingHtml + scoringHtml;
 
-    // Render rounds list
+    // Render rounds list (last 20 on dashboard)
     const sortedRounds = [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date));
-    document.getElementById('roundsList').innerHTML = sortedRounds.map(round => {
-        const summary = buildRoundSummary(round);
+    const recentRounds = sortedRounds.slice(0, 20);
+    const viewAllBtn = sortedRounds.length > 20
+        ? `<div style="text-align:center; margin-top:15px;">
+               <button class="secondary" onclick="viewAllRounds()">View All Rounds (${sortedRounds.length})</button>
+           </div>`
+        : '';
+    document.getElementById('roundsList').innerHTML = recentRounds.map(round => renderRoundItem(round)).join('') + viewAllBtn;
+}
 
-        return `
+function renderRoundItem(round) {
+    const summary = buildRoundSummary(round);
+    return `
         <div class="round-item" onclick="viewRound('${round.id}')">
             <div class="round-header">
                 <div>
@@ -1097,8 +1133,7 @@ function renderDashboard() {
                     <div class="round-stat-value">${ROUND_TYPE_LABELS[round.roundType] || ROUND_TYPE_LABELS[round.roundType || 'normal']}</div>
                 </div>
             </div>
-        </div>
-    `}).join('');
+        </div>`;
 }
 
 function getFilteredRounds() {
@@ -1246,6 +1281,19 @@ function buildScorecardTable(holes, label) {
 
 function closeRoundModal() {
     document.getElementById('roundModal').classList.remove('active');
+}
+
+// All Rounds Modal
+function viewAllRounds() {
+    const sortedRounds = [...appData.rounds].sort((a, b) => new Date(b.date) - new Date(a.date));
+    document.getElementById('allRoundsTitle').textContent = `All Rounds (${sortedRounds.length})`;
+    document.getElementById('allRoundsBody').innerHTML =
+        `<div class="rounds-list">${sortedRounds.map(round => renderRoundItem(round)).join('')}</div>`;
+    document.getElementById('allRoundsModal').classList.add('active');
+}
+
+function closeAllRoundsModal() {
+    document.getElementById('allRoundsModal').classList.remove('active');
 }
 
 // Course Detail Modal

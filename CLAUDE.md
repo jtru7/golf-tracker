@@ -83,7 +83,11 @@ All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole 
 
 ## Features Implemented
 - **Dashboard with 5 KPI sections**: Overview, Off the Tee, Approach Play, Putting, Scoring — all dynamically rendered with distribution bars
+- **KPI Goals**: Set personal targets for 16 KPIs in Settings with customizable thresholds. Dashboard cards show color-coded backgrounds (dark green = well above, light green = at goal, yellow = slightly below, red = well below). Configured via `GOAL_DEFS` in stats.js, rendered by `goalBadge()` helper in renderDashboard(), managed by `renderGoalsForm()` / `saveGoals()` in Settings. Goals stored in `appData.settings.goals`.
+- **Putting Analytics**: Par Conversion moved to Putting section. Putt Make Rate by Distance table (6 buckets: inside 3ft / 3-6 / 6-10 / 10-15 / 15-20 / 20+). Lag Putting cards (3-Putt Avoidance %, Avg Lag Leave ft) for first putts 20+ ft.
 - **Course Detail Modal**: click a course → modal with course-level KPIs, hole difficulty ranking, and hole-by-hole breakdown table (scoring avg, distribution, fairway %, GIR %, avg putts, miss direction arrows)
+- **Course drag-and-drop reordering**: Drag handle on course cards, `reorderArray()` utility in stats.js, container-level event prevention to avoid DOM nesting
+- **Recent Rounds**: Dashboard shows last 20 rounds; "View All Rounds" button opens modal with full scrollable list. `renderRoundItem()` extracted as reusable function.
 - `computeCourseStats()` in stats.js — per-course and per-hole aggregation, delegates to `computeStats()` for dashboard-style KPIs
 - Round types: Normal, League Match, Casual, Scramble (Normal + League count toward handicap)
 - Editable rounds: click a round → detail modal → Edit button → pre-populated form

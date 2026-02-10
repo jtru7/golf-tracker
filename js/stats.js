@@ -9,7 +9,8 @@ function computeStats(rounds) {
             fairwayDist: null, approachDist: null, puttingBreakdown: null,
             puttsPer9: null, feetMadePer9: null, penaltiesPer9: null,
             parConversionPct: null, bogeyAvoidancePct: null, bounceBackRate: null,
-            scoringByPar: null, scoringDistribution: null
+            scoringByPar: null, scoringDistribution: null,
+            puttMakeRate: null, lagPutt3PuttAvoidPct: null, lagPuttAvgLeave: null, lagPuttCount: 0
         };
     }
 
@@ -31,6 +32,21 @@ function computeStats(rounds) {
     let bounceBackOpps = 0, bounceBackSuccess = 0;
     let par3Total = 0, par3Count = 0, par4Total = 0, par4Count = 0, par5Total = 0, par5Count = 0;
     let eagleOrBetter = 0, birdies = 0, pars = 0, bogeys = 0, doubles = 0, triplePlus = 0;
+
+    // Putt make rate by distance buckets
+    const puttBuckets = [
+        { label: 'Inside 3 ft', min: 0, max: 3, attempts: 0, made: 0 },
+        { label: '3-6 ft',      min: 3, max: 6, attempts: 0, made: 0 },
+        { label: '6-10 ft',     min: 6, max: 10, attempts: 0, made: 0 },
+        { label: '10-15 ft',    min: 10, max: 15, attempts: 0, made: 0 },
+        { label: '15-20 ft',    min: 15, max: 20, attempts: 0, made: 0 },
+        { label: '20+ ft',      min: 20, max: Infinity, attempts: 0, made: 0 },
+    ];
+    let hasPuttDistData = false;
+
+    // Lag putting (first putt >= 20 ft)
+    let lagPuttOpportunities = 0, lagPuttNoThreePutt = 0;
+    let totalLagLeave = 0, lagLeavesRecorded = 0;
 
     rounds.forEach(round => {
         const holes = round.holes;
@@ -96,6 +112,30 @@ function computeStats(rounds) {
                 if (firstDist !== null && firstDist !== undefined) {
                     totalFirstPuttDist += firstDist;
                     holesWithFirstPuttDist++;
+                }
+
+                // Putt make rate by distance
+                hole.puttDistances.forEach((dist, pIdx) => {
+                    if (dist === null || dist === undefined) return;
+                    hasPuttDistData = true;
+                    const bucket = puttBuckets.find(b => dist >= b.min && dist < b.max);
+                    if (bucket) {
+                        bucket.attempts++;
+                        if (pIdx === hole.puttDistances.length - 1) bucket.made++;
+                    }
+                });
+
+                // Lag putting (first putt >= 20 ft)
+                if (firstDist !== null && firstDist !== undefined && firstDist >= 20) {
+                    lagPuttOpportunities++;
+                    if ((hole.putts || 0) <= 2) lagPuttNoThreePutt++;
+                    if (hole.puttDistances.length >= 2) {
+                        const secondDist = hole.puttDistances[1];
+                        if (secondDist !== null && secondDist !== undefined) {
+                            totalLagLeave += secondDist;
+                            lagLeavesRecorded++;
+                        }
+                    }
                 }
             }
 
@@ -198,7 +238,18 @@ function computeStats(rounds) {
             bogeyPct: totalHoles > 0 ? Math.round((bogeys / totalHoles) * 100) : 0,
             doublePct: totalHoles > 0 ? Math.round((doubles / totalHoles) * 100) : 0,
             triplePct: totalHoles > 0 ? Math.round((triplePlus / totalHoles) * 100) : 0
-        }
+        },
+
+        // Putt make rate by distance
+        puttMakeRate: hasPuttDistData ? puttBuckets.map(b => ({
+            label: b.label, attempts: b.attempts, made: b.made,
+            pct: b.attempts > 0 ? Math.round((b.made / b.attempts) * 100) : 0
+        })) : null,
+
+        // Lag putting (first putt >= 20 ft)
+        lagPutt3PuttAvoidPct: lagPuttOpportunities > 0 ? Math.round((lagPuttNoThreePutt / lagPuttOpportunities) * 100) : null,
+        lagPuttAvgLeave: lagLeavesRecorded > 0 ? parseFloat((totalLagLeave / lagLeavesRecorded).toFixed(1)) : null,
+        lagPuttCount: lagPuttOpportunities
     };
 }
 
@@ -434,6 +485,7 @@ const GOAL_DEFS = {
     scoringAvgPar3:    { direction: 'lower',  buffer: 0.5, label: 'Par 3 Scoring Avg', unit: '' },
     scoringAvgPar4:    { direction: 'lower',  buffer: 0.5, label: 'Par 4 Scoring Avg', unit: '' },
     scoringAvgPar5:    { direction: 'lower',  buffer: 0.5, label: 'Par 5 Scoring Avg', unit: '' },
+    lagPutt3PuttAvoidPct: { direction: 'higher', buffer: 10, label: '3-Putt Avoidance (20+)', unit: '%' },
 };
 
 // Returns goal status: 'far-above' | 'above' | 'below' | 'far-below' | null
