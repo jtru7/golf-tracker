@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { computeStats, computeHandicap, filterRounds, buildRoundSummary, reorderArray, GOAL_DEFS, getGoalStatus, TREND_KPIS, computeTrendData, computeMovingAverage } = require('../js/stats.js');
+const { computeStats, computeHandicap, filterRounds, buildRoundSummary, reorderArray, GOAL_DEFS, getGoalStatus, TREND_KPIS, computeTrendData, computeMovingAverage, computeMatchPlayStats } = require('../js/stats.js');
 
 // Helper: create a minimal hole object
 function makeHole(overrides = {}) {
@@ -1136,5 +1136,142 @@ describe('computeMovingAverage', () => {
         expect(result[4].value).toBe(30);
         // idx 6: [70, 60, 50, 40, 30] → 50
         expect(result[6].value).toBe(50);
+    });
+});
+
+// ─── computeMatchPlayStats ─────────────────────────────────
+
+describe('computeMatchPlayStats', () => {
+    it('returns zeros for empty rounds array', () => {
+        const result = computeMatchPlayStats([]);
+        expect(result.matchesPlayed).toBe(0);
+        expect(result.totalPoints).toBe(0);
+        expect(result.holesWon).toBe(0);
+        expect(result.holesDrawn).toBe(0);
+        expect(result.holesLost).toBe(0);
+        expect(result.winPct).toBe(0);
+        expect(result.pointsPer9).toBe(0);
+    });
+
+    it('returns zeros when rounds have no match data', () => {
+        const round = makeRound();
+        const result = computeMatchPlayStats([round]);
+        expect(result.matchesPlayed).toBe(0);
+        expect(result.totalPoints).toBe(0);
+    });
+
+    it('computes stats for all wins', () => {
+        const holes = Array.from({ length: 9 }, (_, i) =>
+            makeHole({ number: i + 1, matchResult: 'win' })
+        );
+        const round = makeRound({ holes, roundType: 'match_play' });
+        const result = computeMatchPlayStats([round]);
+        expect(result.matchesPlayed).toBe(1);
+        expect(result.totalPoints).toBe(9);
+        expect(result.holesWon).toBe(9);
+        expect(result.holesDrawn).toBe(0);
+        expect(result.holesLost).toBe(0);
+        expect(result.winPct).toBe(100);
+        expect(result.pointsPer9).toBe(9);
+    });
+
+    it('computes stats for all losses', () => {
+        const holes = Array.from({ length: 9 }, (_, i) =>
+            makeHole({ number: i + 1, matchResult: 'loss' })
+        );
+        const round = makeRound({ holes, roundType: 'match_play' });
+        const result = computeMatchPlayStats([round]);
+        expect(result.matchesPlayed).toBe(1);
+        expect(result.totalPoints).toBe(0);
+        expect(result.holesWon).toBe(0);
+        expect(result.holesLost).toBe(9);
+        expect(result.winPct).toBe(0);
+        expect(result.lossPct).toBe(100);
+        expect(result.pointsPer9).toBe(0);
+    });
+
+    it('computes mixed results correctly (W=1, D=0.5, L=0)', () => {
+        const holes = [
+            makeHole({ number: 1, matchResult: 'win' }),
+            makeHole({ number: 2, matchResult: 'win' }),
+            makeHole({ number: 3, matchResult: 'draw' }),
+            makeHole({ number: 4, matchResult: 'draw' }),
+            makeHole({ number: 5, matchResult: 'loss' }),
+            makeHole({ number: 6, matchResult: 'loss' }),
+            makeHole({ number: 7, matchResult: 'win' }),
+            makeHole({ number: 8, matchResult: 'draw' }),
+            makeHole({ number: 9, matchResult: 'loss' }),
+        ];
+        const round = makeRound({ holes, roundType: 'match_play' });
+        const result = computeMatchPlayStats([round]);
+        // 3 wins (3pt) + 3 draws (1.5pt) + 3 losses (0pt) = 4.5
+        expect(result.totalPoints).toBe(4.5);
+        expect(result.holesWon).toBe(3);
+        expect(result.holesDrawn).toBe(3);
+        expect(result.holesLost).toBe(3);
+        expect(result.winPct).toBeCloseTo(33.3, 0);
+        expect(result.drawPct).toBeCloseTo(33.3, 0);
+        expect(result.lossPct).toBeCloseTo(33.3, 0);
+        expect(result.pointsPer9).toBe(4.5);
+    });
+
+    it('handles multiple rounds with averages', () => {
+        const holes1 = Array.from({ length: 9 }, (_, i) =>
+            makeHole({ number: i + 1, matchResult: 'win' })
+        );
+        const holes2 = Array.from({ length: 9 }, (_, i) =>
+            makeHole({ number: i + 1, matchResult: 'loss' })
+        );
+        const round1 = makeRound({ id: '1', holes: holes1, roundType: 'match_play' });
+        const round2 = makeRound({ id: '2', holes: holes2, roundType: 'match_play' });
+        const result = computeMatchPlayStats([round1, round2]);
+        expect(result.matchesPlayed).toBe(2);
+        expect(result.totalPoints).toBe(9);
+        expect(result.avgPointsPerMatch).toBe(4.5);
+        expect(result.holesWon).toBe(9);
+        expect(result.holesLost).toBe(9);
+        expect(result.winPct).toBe(50);
+        expect(result.pointsPer9).toBe(4.5);
+    });
+
+    it('handles partial match data (some holes without matchResult)', () => {
+        const holes = [
+            makeHole({ number: 1, matchResult: 'win' }),
+            makeHole({ number: 2, matchResult: 'draw' }),
+            makeHole({ number: 3 }),  // no matchResult
+            makeHole({ number: 4, matchResult: 'loss' }),
+            makeHole({ number: 5 }),  // no matchResult
+            makeHole({ number: 6 }),  // no matchResult
+            makeHole({ number: 7, matchResult: 'win' }),
+            makeHole({ number: 8 }),  // no matchResult
+            makeHole({ number: 9, matchResult: 'draw' }),
+        ];
+        const round = makeRound({ holes, roundType: 'match_play' });
+        const result = computeMatchPlayStats([round]);
+        expect(result.matchesPlayed).toBe(1);
+        expect(result.totalMatchHoles).toBe(5);
+        // 2 wins (2pt) + 2 draws (1pt) + 1 loss (0pt) = 3
+        expect(result.totalPoints).toBe(3);
+        expect(result.holesWon).toBe(2);
+        expect(result.holesDrawn).toBe(2);
+        expect(result.holesLost).toBe(1);
+    });
+
+    it('treats legacy rounds without matchResult as no match data', () => {
+        const round = makeRound({ roundType: 'league' });
+        // Default makeRound holes don't have matchResult
+        const result = computeMatchPlayStats([round]);
+        expect(result.matchesPlayed).toBe(0);
+    });
+
+    it('handles null rounds array', () => {
+        const result = computeMatchPlayStats(null);
+        expect(result.matchesPlayed).toBe(0);
+    });
+
+    it('handles round with no holes array', () => {
+        const round = { id: '1', courseId: 'c1', roundType: 'match_play' };
+        const result = computeMatchPlayStats([round]);
+        expect(result.matchesPlayed).toBe(0);
     });
 });

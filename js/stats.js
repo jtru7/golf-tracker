@@ -254,7 +254,7 @@ function computeStats(rounds) {
 }
 
 function computeHandicap(rounds) {
-    const handicapTypes = ['normal', 'league'];
+    const handicapTypes = ['normal', 'league', 'match_play'];
     const eligible = rounds.filter(r =>
         r.courseRating && r.slopeRating &&
         handicapTypes.includes(r.roundType || 'normal')
@@ -562,7 +562,66 @@ function computeMovingAverage(data, window) {
     });
 }
 
+// ── Match Play Stats ─────────────────────────────────────────
+function computeMatchPlayStats(rounds) {
+    const result = {
+        matchesPlayed: 0,
+        totalPoints: 0,
+        avgPointsPerMatch: 0,
+        holesWon: 0,
+        holesDrawn: 0,
+        holesLost: 0,
+        totalMatchHoles: 0,
+        winPct: 0,
+        drawPct: 0,
+        lossPct: 0,
+        pointsPer9: 0,
+    };
+
+    if (!rounds || rounds.length === 0) return result;
+
+    const MATCH_POINTS = { win: 1, draw: 0.5, loss: 0 };
+
+    rounds.forEach(round => {
+        if (!round.holes) return;
+
+        let roundHasMatch = false;
+        let roundPoints = 0;
+        let roundMatchHoles = 0;
+
+        round.holes.forEach(hole => {
+            if (hole.matchResult && MATCH_POINTS[hole.matchResult] !== undefined) {
+                roundHasMatch = true;
+                roundMatchHoles++;
+                const pts = MATCH_POINTS[hole.matchResult];
+                roundPoints += pts;
+                if (hole.matchResult === 'win') result.holesWon++;
+                else if (hole.matchResult === 'draw') result.holesDrawn++;
+                else if (hole.matchResult === 'loss') result.holesLost++;
+            }
+        });
+
+        if (roundHasMatch) {
+            result.matchesPlayed++;
+            result.totalPoints += roundPoints;
+            result.totalMatchHoles += roundMatchHoles;
+        }
+    });
+
+    if (result.matchesPlayed > 0) {
+        result.avgPointsPerMatch = parseFloat((result.totalPoints / result.matchesPlayed).toFixed(1));
+    }
+    if (result.totalMatchHoles > 0) {
+        result.winPct = parseFloat((result.holesWon / result.totalMatchHoles * 100).toFixed(1));
+        result.drawPct = parseFloat((result.holesDrawn / result.totalMatchHoles * 100).toFixed(1));
+        result.lossPct = parseFloat((result.holesLost / result.totalMatchHoles * 100).toFixed(1));
+        result.pointsPer9 = parseFloat((result.totalPoints / result.totalMatchHoles * 9).toFixed(1));
+    }
+
+    return result;
+}
+
 // Export for Vitest (ignored in browser)
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { computeStats, computeHandicap, filterRounds, buildRoundSummary, computeCourseStats, reorderArray, GOAL_DEFS, getGoalStatus, TREND_KPIS, computeTrendData, computeMovingAverage };
+    module.exports = { computeStats, computeHandicap, filterRounds, buildRoundSummary, computeCourseStats, reorderArray, GOAL_DEFS, getGoalStatus, TREND_KPIS, computeTrendData, computeMovingAverage, computeMatchPlayStats };
 }

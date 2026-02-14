@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Golf Stats Tracker</title>
+    <title>TRUScore</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>&#9971; Golf Stats Tracker</h1>
+            <h1>&#9971; TRUScore</h1>
             <div class="subtitle">Track your rounds, analyze your game, lower your handicap</div>
         </header>
 
@@ -84,6 +84,7 @@
                                 <select id="roundType" onchange="onRoundTypeChange()">
                                     <option value="normal">Normal</option>
                                     <option value="league">League Match</option>
+                                    <option value="match_play">Match Play</option>
                                     <option value="casual">Casual</option>
                                     <option value="scramble">Scramble</option>
                                 </select>
@@ -113,6 +114,17 @@
 
                 <!-- Settings View -->
                 <div id="settings" class="view">
+                    <div class="card">
+                        <h2>Appearance</h2>
+                        <div class="form-group">
+                            <label>Theme</label>
+                            <select id="themeSelect" onchange="changeTheme()">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="card">
                         <h2>Google Sheets Integration</h2>
                         <div id="settingsAlert"></div>

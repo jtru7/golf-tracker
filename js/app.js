@@ -14,6 +14,9 @@ let editingRoundId = null;
 function init() {
     loadFromLocalStorage();
 
+    // Apply theme early to avoid flash of wrong theme
+    applyTheme(appData.settings.theme || 'light');
+
     // Normalize IDs to strings (Google Sheets converts numeric strings to numbers)
     appData.courses.forEach(c => { c.id = String(c.id); });
     appData.rounds.forEach(r => { r.id = String(r.id); r.courseId = String(r.courseId); });
@@ -589,8 +592,9 @@ function loadCourseData() {
     renderHoleCards(course);
 }
 
-const HANDICAP_ELIGIBLE_TYPES = ['normal', 'league'];
-const ROUND_TYPE_LABELS = { normal: 'Normal', league: 'League Match', casual: 'Casual', scramble: 'Scramble' };
+const HANDICAP_ELIGIBLE_TYPES = ['normal', 'league', 'match_play'];
+const ROUND_TYPE_LABELS = { normal: 'Normal', league: 'League Match', match_play: 'Match Play', casual: 'Casual', scramble: 'Scramble' };
+const MATCH_PLAY_TYPES = ['league', 'match_play'];
 
 function onRoundTypeChange() {
     const roundType = document.getElementById('roundType').value;
@@ -602,6 +606,16 @@ function onRoundTypeChange() {
         note.textContent = 'Does not count toward handicap';
         note.classList.add('no-handicap');
     }
+
+    // Show/hide match play W/D/L toggles
+    const isMatchType = MATCH_PLAY_TYPES.includes(roundType);
+    document.querySelectorAll('.match-toggle-row').forEach(row => {
+        row.style.display = isMatchType ? '' : 'none';
+        if (!isMatchType) {
+            // Clear match selections when switching away
+            row.querySelectorAll('.toggle-btn.active').forEach(btn => btn.classList.remove('active'));
+        }
+    });
 }
 
 function onTeeSelectChange() {
@@ -628,6 +642,13 @@ function renderHoleCards(course) {
             <div class="hole-header">
                 <div class="hole-number">Hole ${hole.number}</div>
                 <div class="hole-par">Par ${hole.par} &bull; ${yardage}y${hcpStr}</div>
+            </div>
+            <div class="match-toggle-row" data-hole="${hole.number}" style="display: none;">
+                <div class="button-group" data-hole="${hole.number}" data-type="match">
+                    <button type="button" class="toggle-btn match-win" data-value="win" onclick="selectToggle(${hole.number}, 'match', 'win')">W</button>
+                    <button type="button" class="toggle-btn match-draw" data-value="draw" onclick="selectToggle(${hole.number}, 'match', 'draw')">D</button>
+                    <button type="button" class="toggle-btn match-loss" data-value="loss" onclick="selectToggle(${hole.number}, 'match', 'loss')">L</button>
+                </div>
             </div>
             <div class="hole-inputs">
                 <!-- Score and Penalties Row -->
@@ -830,6 +851,11 @@ function saveRound() {
         const approachBtn = approachGroup ? approachGroup.querySelector('.toggle-btn.active') : null;
         const approachValue = approachBtn ? approachBtn.dataset.value : null;
 
+        // Get match play result
+        const matchGroup = document.querySelector(`.button-group[data-hole="${i}"][data-type="match"]`);
+        const matchBtn = matchGroup ? matchGroup.querySelector('.toggle-btn.active') : null;
+        const matchResult = matchBtn ? matchBtn.dataset.value : null;
+
         totalScore += score;
         holes.push({
             number: i,
@@ -853,7 +879,8 @@ function saveRound() {
             fairwayDirection: fairwayValue, // 'left', 'hit', 'right', or null
             gir: approachValue === 'gir',
             approachResult: approachValue, // 'gir', 'long', 'short', 'left', 'right', or null
-            bunker: document.getElementById(`bunker${i}`).checked
+            bunker: document.getElementById(`bunker${i}`).checked,
+            matchResult: matchResult
         });
     }
 
@@ -1222,8 +1249,64 @@ function renderDashboard() {
             </div>
         </div>`;
 
+    // ── Section 6: Match Play (only if data exists) ──
+    const matchStats = computeMatchPlayStats(rounds);
+    const matchPlayHtml = matchStats.matchesPlayed > 0 ? `
+        <div class="dashboard-section">
+            <h3>Match Play</h3>
+            <div class="section-stats">
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.matchesPlayed}</div>
+                    <div class="section-stat-label">Matches</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.pointsPer9}</div>
+                    <div class="section-stat-label">Points / 9</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.winPct}%</div>
+                    <div class="section-stat-label">Hole Win %</div>
+                </div>
+            </div>
+            <div style="margin-top:15px;font-size:0.85rem;font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;">W / D / L Distribution</div>
+            ${distBar([
+                { cls: 'seg-match-win', pct: matchStats.winPct, label: 'Win ' + matchStats.winPct + '%' },
+                { cls: 'seg-match-draw', pct: matchStats.drawPct, label: 'Draw ' + matchStats.drawPct + '%' },
+                { cls: 'seg-match-loss', pct: matchStats.lossPct, label: 'Loss ' + matchStats.lossPct + '%' }
+            ])}
+            ${distLegend([
+                { cls: 'seg-match-win', label: 'Win', value: matchStats.winPct },
+                { cls: 'seg-match-draw', label: 'Draw', value: matchStats.drawPct },
+                { cls: 'seg-match-loss', label: 'Loss', value: matchStats.lossPct }
+            ])}
+            <div class="section-stats" style="margin-top:15px;">
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.holesWon}</div>
+                    <div class="section-stat-label">Holes Won</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.holesDrawn}</div>
+                    <div class="section-stat-label">Holes Drawn</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.holesLost}</div>
+                    <div class="section-stat-label">Holes Lost</div>
+                </div>
+            </div>
+            <div class="section-stats" style="margin-top:10px;">
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.totalPoints}</div>
+                    <div class="section-stat-label">Total Points</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${matchStats.avgPointsPerMatch}</div>
+                    <div class="section-stat-label">Avg Pts / Match</div>
+                </div>
+            </div>
+        </div>` : '';
+
     document.getElementById('dashboardContent').innerHTML =
-        overviewHtml + offTheTeeHtml + approachHtml + puttingHtml + scoringHtml;
+        overviewHtml + offTheTeeHtml + approachHtml + puttingHtml + scoringHtml + matchPlayHtml;
 
     // Render rounds list (last 20 on dashboard)
     const sortedRounds = [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1497,6 +1580,14 @@ function viewTrendModal(kpiKey) {
     document.getElementById('trendModal').classList.add('active');
 
     requestAnimationFrame(() => {
+        // Read theme-aware colors from CSS variables
+        const cs = getComputedStyle(document.documentElement);
+        const chartBlue = cs.getPropertyValue('--blue').trim();
+        const chartGreen = cs.getPropertyValue('--forest-green').trim();
+        const chartWhite = cs.getPropertyValue('--white').trim();
+        const textColor = cs.getPropertyValue('--text-light').trim();
+        const gridColor = cs.getPropertyValue('--border').trim();
+
         trendChartInstance = new Chart(canvas, {
             type: 'line',
             data: {
@@ -1505,12 +1596,12 @@ function viewTrendModal(kpiKey) {
                     {
                         label: def.label,
                         data: chartPoints.map(p => p.raw),
-                        borderColor: '#5b8fa3',
-                        backgroundColor: 'rgba(91,143,163,0.1)',
+                        borderColor: chartBlue,
+                        backgroundColor: chartBlue + '1a',
                         borderWidth: 1.5,
                         pointRadius: 4,
-                        pointBackgroundColor: '#5b8fa3',
-                        pointBorderColor: '#fff',
+                        pointBackgroundColor: chartBlue,
+                        pointBorderColor: chartWhite,
                         pointBorderWidth: 1.5,
                         tension: 0,
                         fill: false,
@@ -1519,7 +1610,7 @@ function viewTrendModal(kpiKey) {
                     {
                         label: '5-Round Avg',
                         data: chartPoints.map(p => p.ma),
-                        borderColor: '#1a4d2e',
+                        borderColor: chartGreen,
                         backgroundColor: 'transparent',
                         borderWidth: 3,
                         pointRadius: 0,
@@ -1544,17 +1635,17 @@ function viewTrendModal(kpiKey) {
                     legend: {
                         display: true,
                         position: 'top',
-                        labels: { usePointStyle: true, font: { family: 'Montserrat', size: 12 } }
+                        labels: { usePointStyle: true, font: { family: 'Montserrat', size: 12 }, color: textColor }
                     }
                 },
                 scales: {
                     x: {
-                        ticks: { maxRotation: 45, font: { family: 'Montserrat', size: 11 } },
+                        ticks: { maxRotation: 45, font: { family: 'Montserrat', size: 11 }, color: textColor },
                         grid: { display: false }
                     },
                     y: {
-                        ticks: { font: { family: 'Montserrat', size: 11 } },
-                        grid: { color: 'rgba(0,0,0,0.06)' }
+                        ticks: { font: { family: 'Montserrat', size: 11 }, color: textColor },
+                        grid: { color: gridColor }
                     }
                 }
             }
@@ -1833,6 +1924,9 @@ function editRound(roundId) {
     const course = appData.courses.find(c => c.id === round.courseId);
     if (course) renderHoleCards(course);
 
+    // Show/hide match toggles now that hole cards exist
+    onRoundTypeChange();
+
     // Pre-populate each hole's data
     round.holes.forEach(hole => {
         const n = hole.number;
@@ -1854,6 +1948,11 @@ function editRound(roundId) {
         // Approach toggle
         if (hole.approachResult) {
             selectToggle(n, 'approach', hole.approachResult);
+        }
+
+        // Match result toggle
+        if (hole.matchResult) {
+            selectToggle(n, 'match', hole.matchResult);
         }
 
         // Putt distances
@@ -1912,6 +2011,25 @@ function showConfirmDialog({ title, message, confirmText, icon }) {
     });
 }
 
+// Theme management
+function applyTheme(theme) {
+    if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    // Update selector if it exists
+    const sel = document.getElementById('themeSelect');
+    if (sel) sel.value = theme || 'light';
+}
+
+function changeTheme() {
+    const theme = document.getElementById('themeSelect').value;
+    appData.settings.theme = theme;
+    applyTheme(theme);
+    saveToLocalStorage();
+}
+
 // Settings management
 function saveSettings() {
     const url = document.getElementById('webAppUrl').value.trim();
@@ -1926,6 +2044,7 @@ function saveSettings() {
 
 function loadSettings() {
     document.getElementById('webAppUrl').value = appData.settings.webAppUrl || '';
+    document.getElementById('themeSelect').value = appData.settings.theme || 'light';
     renderGoalsForm();
 }
 

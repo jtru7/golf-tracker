@@ -13,6 +13,58 @@
     --text-light: #5a6c5a;
     --red: #a84448;
     --blue: #5b8fa3;
+    --gold: #d4a017;
+    --shadow-color: rgba(0,0,0,0.08);
+    --modal-overlay: rgba(0,0,0,0.6);
+    --alert-success-bg: #d4edda;
+    --alert-success-text: #155724;
+    --alert-success-border: #c3e6cb;
+    --alert-error-bg: #f8d7da;
+    --alert-error-text: #721c24;
+    --alert-error-border: #f5c6cb;
+}
+
+[data-theme="dark"] {
+    --forest-green: #2d7a4a;
+    --fairway-green: #3a8f5c;
+    --grass-light: #5aa06e;
+    --sand: #c9a45e;
+    --sand-light: #3d3628;
+    --white: #1a1d1a;
+    --cream: #242824;
+    --border: #3a3d3a;
+    --text-dark: #e0e8e0;
+    --text-light: #8a9c8a;
+    --red: #d45c5c;
+    --blue: #6fb0c7;
+    --gold: #e0b030;
+    --shadow-color: rgba(0,0,0,0.3);
+    --modal-overlay: rgba(0,0,0,0.75);
+    --alert-success-bg: rgba(45,122,74,0.2);
+    --alert-success-text: #7dcea0;
+    --alert-success-border: rgba(45,122,74,0.3);
+    --alert-error-bg: rgba(212,92,92,0.2);
+    --alert-error-text: #e89a9a;
+    --alert-error-border: rgba(212,92,92,0.3);
+}
+
+/* Dark mode goal badge overrides (higher opacity for dark backgrounds) */
+[data-theme="dark"] .goal-far-above { background: rgba(45,122,74,0.25); border-color: rgba(45,122,74,0.45); }
+[data-theme="dark"] .goal-above { background: rgba(90,160,110,0.18); border-color: rgba(90,160,110,0.35); }
+[data-theme="dark"] .goal-below { background: rgba(210,170,60,0.2); border-color: rgba(210,170,60,0.4); }
+[data-theme="dark"] .goal-far-below { background: rgba(212,92,92,0.2); border-color: rgba(212,92,92,0.4); }
+
+/* Dark mode input styling */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+    background: var(--cream);
+    color: var(--text-dark);
+    border-color: var(--border);
+}
+
+[data-theme="dark"] input::placeholder {
+    color: var(--text-light);
 }
 
 * {
@@ -58,9 +110,9 @@ header::before {
 h1 {
     font-family: 'Crimson Pro', serif;
     color: var(--white);
-    font-size: 2.8rem;
+    font-size: 3.2rem;
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: 1.5px;
     position: relative;
 }
 
@@ -75,7 +127,7 @@ h1 {
 .main-content {
     background: var(--white);
     border-radius: 0 0 12px 12px;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 30px var(--shadow-color);
     overflow: hidden;
 }
 
@@ -681,12 +733,44 @@ button.secondary:hover {
 .seg-putt-3 { background: var(--sand); }
 .seg-putt-3plus { background: var(--red); }
 
-.seg-score-eagle { background: #d4a017; }
+.seg-score-eagle { background: var(--gold); }
 .seg-score-birdie { background: var(--fairway-green); }
 .seg-score-par { background: var(--grass-light); }
 .seg-score-bogey { background: var(--sand); }
 .seg-score-double { background: var(--red); }
 .seg-score-triple { background: #6b2c2c; }
+
+.seg-match-win { background: var(--fairway-green); }
+.seg-match-draw { background: var(--gold); }
+.seg-match-loss { background: var(--red); }
+
+/* Match play W/D/L toggle on hole cards */
+.match-toggle-row {
+    padding: 0 12px 8px;
+}
+.match-toggle-row .button-group {
+    gap: 4px;
+}
+.match-toggle-row .toggle-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+.toggle-btn.match-win.active {
+    background: var(--fairway-green);
+    border-color: var(--fairway-green);
+    color: var(--white);
+}
+.toggle-btn.match-draw.active {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--white);
+}
+.toggle-btn.match-loss.active {
+    background: var(--red);
+    border-color: var(--red);
+    color: var(--white);
+}
 
 /* Inline stats grid within sections */
 .section-stats {
@@ -789,7 +873,7 @@ button.secondary:hover {
 
 .round-item:hover {
     border-color: var(--fairway-green);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 15px var(--shadow-color);
 }
 
 .round-header {
@@ -918,7 +1002,7 @@ button.secondary:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--modal-overlay);
     z-index: 1000;
     align-items: center;
     justify-content: center;
@@ -984,15 +1068,15 @@ button.secondary:hover {
 }
 
 .alert-success {
-    background: #d4edda;
-    color: #155724;
-    border: 2px solid #c3e6cb;
+    background: var(--alert-success-bg);
+    color: var(--alert-success-text);
+    border: 2px solid var(--alert-success-border);
 }
 
 .alert-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 2px solid #f5c6cb;
+    background: var(--alert-error-bg);
+    color: var(--alert-error-text);
+    border: 2px solid var(--alert-error-border);
 }
 
 .empty-state {
