@@ -1015,6 +1015,31 @@ button.secondary:hover {
     color: var(--text-dark);
 }
 
+.empty-state p {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    max-width: 320px;
+    margin: 0 auto 20px;
+}
+
+.empty-state-cta {
+    display: inline-block;
+    padding: 10px 24px;
+    background: var(--forest-green);
+    color: var(--white);
+    border: none;
+    border-radius: 6px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.empty-state-cta:hover {
+    background: var(--dark-green);
+}
+
 /* Round Detail Modal */
 .round-detail-summary {
     display: grid;
@@ -1417,6 +1442,105 @@ button.secondary:hover {
     font-size: 0.7rem;
     color: var(--text-light);
     font-weight: 600;
+}
+
+/* Confirm dialog */
+.confirm-modal {
+    z-index: 2000;
+}
+
+.confirm-dialog {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 380px;
+    width: 90%;
+    margin: 20vh auto;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: confirmSlide 0.2s ease;
+}
+
+@keyframes confirmSlide {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.confirm-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.confirm-dialog h3 {
+    font-family: 'Crimson Pro', serif;
+    color: var(--text-dark);
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+}
+
+.confirm-dialog p {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    line-height: 1.5;
+    margin-bottom: 24px;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.confirm-actions .secondary {
+    flex: 1;
+}
+
+.confirm-danger {
+    flex: 1;
+    padding: 10px 20px;
+    background: var(--red);
+    color: var(--white);
+    border: none;
+    border-radius: 6px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.confirm-danger:hover {
+    background: #8b3a3d;
+}
+
+/* Trend chart icon button */
+.trend-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    margin-left: 4px;
+    color: var(--text-light);
+    opacity: 0.5;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    vertical-align: middle;
+}
+
+.trend-icon-btn:hover {
+    opacity: 1;
+    color: var(--forest-green);
+}
+
+.trend-icon {
+    width: 14px;
+    height: 12px;
+}
+
+#trendModalBody canvas {
+    max-width: 100%;
 }
 
 @media (max-width: 768px) {

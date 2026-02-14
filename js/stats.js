@@ -279,9 +279,15 @@ function computeHandicap(rounds) {
     return parseFloat((bestDiffs.reduce((a, b) => a + b, 0) / numToUse * 0.96).toFixed(1));
 }
 
-function filterRounds(rounds, { startDate, endDate, count } = {}) {
+function filterRounds(rounds, { startDate, endDate, count, courseId, roundType } = {}) {
     let filtered = [...rounds];
 
+    if (courseId && courseId !== 'all') {
+        filtered = filtered.filter(r => r.courseId === courseId);
+    }
+    if (roundType && roundType !== 'all') {
+        filtered = filtered.filter(r => (r.roundType || 'normal') === roundType);
+    }
     if (startDate) {
         filtered = filtered.filter(r => r.date >= startDate);
     }
@@ -504,7 +510,59 @@ function getGoalStatus(value, target, direction, buffer) {
     }
 }
 
+// Trendable KPI definitions
+const TREND_KPIS = {
+    avgScore:      { label: 'Score',         extract: (s) => s.avgScore,      unit: '',  decimals: 0 },
+    puttsPer9:     { label: 'Putts / 9',     extract: (s) => s.puttsPer9,     unit: '',  decimals: 1 },
+    fairwayPct:    { label: 'Fairway %',     extract: (s) => s.fairwayPct,    unit: '%', decimals: 0 },
+    girPct:        { label: 'GIR %',         extract: (s) => s.girPct,        unit: '%', decimals: 0 },
+    scramblingPct: { label: 'Scrambling %',  extract: (s) => s.scramblingPct, unit: '%', decimals: 0 },
+    handicap:      { label: 'Handicap Index', extract: null,                  unit: '',  decimals: 1 },
+};
+
+// Compute per-round trend data for a given KPI.
+// Returns [{ date, value }] sorted oldest-first. value is null when insufficient data.
+function computeTrendData(allRounds, kpiKey) {
+    if (!allRounds || allRounds.length === 0) return [];
+
+    const sorted = [...allRounds].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (kpiKey === 'handicap') {
+        const results = [];
+        for (let i = 0; i < sorted.length; i++) {
+            const roundsUpToHere = sorted.slice(0, i + 1);
+            const hcap = computeHandicap(roundsUpToHere);
+            results.push({ date: sorted[i].date, value: hcap });
+        }
+        return results;
+    }
+
+    const def = TREND_KPIS[kpiKey];
+    if (!def || !def.extract) return [];
+
+    return sorted.map(round => {
+        const stats = computeStats([round]);
+        const value = def.extract(stats);
+        return { date: round.date, value: (value === undefined || isNaN(value)) ? null : value };
+    });
+}
+
+// Simple moving average over [{ date, value }]. Skips nulls. Allows partial windows.
+function computeMovingAverage(data, window) {
+    if (!data || data.length === 0) return [];
+    if (!window) window = 5;
+    return data.map((point, idx) => {
+        const values = [];
+        for (let j = idx; j >= 0 && values.length < window; j--) {
+            if (data[j].value !== null && data[j].value !== undefined) values.push(data[j].value);
+        }
+        if (values.length === 0) return { date: point.date, value: null };
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        return { date: point.date, value: parseFloat(avg.toFixed(1)) };
+    });
+}
+
 // Export for Vitest (ignored in browser)
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { computeStats, computeHandicap, filterRounds, buildRoundSummary, computeCourseStats, reorderArray, GOAL_DEFS, getGoalStatus };
+    module.exports = { computeStats, computeHandicap, filterRounds, buildRoundSummary, computeCourseStats, reorderArray, GOAL_DEFS, getGoalStatus, TREND_KPIS, computeTrendData, computeMovingAverage };
 }

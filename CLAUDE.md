@@ -5,6 +5,7 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 
 ## Tech Stack
 - Vanilla HTML, CSS, JavaScript — no frameworks, no build tools
+- Chart.js v4 for trendline charts (loaded locally from `assets/chart.umd.js`)
 - localStorage for primary data persistence
 - Google Sheets sync via Google Apps Script web app (see `google-apps-script/Code.gs`)
 - Google Fonts: Crimson Pro (headings/display), Montserrat (body/UI)
@@ -16,7 +17,7 @@ A personal golf statistics web app for tracking rounds, courses, and performance
 - `css/styles.css` — all styles, CSS custom properties for theming
 - `js/app.js` — DOM interaction, event handlers, rendering
 - `js/stats.js` — pure calculation functions (testable, no DOM access)
-- `assets/` — reserved for images/icons
+- `assets/` — images/icons and Chart.js library (`chart.umd.js`)
 - `google-apps-script/Code.gs` — Apps Script to deploy in Google Sheets for read/write sync
 - `tests/stats.test.js` — Vitest unit tests for stats.js
 
@@ -87,6 +88,7 @@ All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole 
 - **Putting Analytics**: Par Conversion moved to Putting section. Putt Make Rate by Distance table (6 buckets: inside 3ft / 3-6 / 6-10 / 10-15 / 15-20 / 20+). Lag Putting cards (3-Putt Avoidance %, Avg Lag Leave ft) for first putts 20+ ft.
 - **Course Detail Modal**: click a course → modal with course-level KPIs, hole difficulty ranking, and hole-by-hole breakdown table (scoring avg, distribution, fairway %, GIR %, avg putts, miss direction arrows)
 - **Course drag-and-drop reordering**: Drag handle on course cards, `reorderArray()` utility in stats.js, container-level event prevention to avoid DOM nesting
+- **Chart.js Trendlines**: 6 KPIs (Score, Putts/9, Fairway %, GIR %, Scrambling %, Handicap) have a trend icon on their dashboard card. Clicking opens a modal with a Chart.js line chart showing raw per-round data overlaid with a 5-round moving average. `TREND_KPIS` constant, `computeTrendData()`, and `computeMovingAverage()` in stats.js. Handicap trend uses all rounds; other KPIs respect dashboard filters.
 - **Recent Rounds**: Dashboard shows last 20 rounds; "View All Rounds" button opens modal with full scrollable list. `renderRoundItem()` extracted as reusable function.
 - `computeCourseStats()` in stats.js — per-course and per-hole aggregation, delegates to `computeStats()` for dashboard-style KPIs
 - Round types: Normal, League Match, Casual, Scramble (Normal + League count toward handicap)
@@ -94,12 +96,11 @@ All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole 
 - Multi-tee course setup (Red/White/Blue with per-tee rating, slope, yardage, hole handicaps)
 - Putt distance tracking per hole (distance for each putt attempt)
 - Bunker/sand save tracking per hole
-- Google Sheets sync via Apps Script web app
+- Google Sheets sync via Apps Script web app (multi-tee format, auto-push on save)
 - Number input spinners hidden on hole cards to prevent scroll accidents
 - Dashboard filters: date range, last N rounds
 
 ## Known Issues / TODOs
-- No data visualization / charts yet (plan: Chart.js)
 - Test course is hardcoded in `init()` — should be removable
 - No input validation on course creation (empty name allowed)
 - Inline styles in JS template literals — consider moving to CSS classes

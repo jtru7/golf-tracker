@@ -14,6 +14,24 @@ let editingRoundId = null;
 function init() {
     loadFromLocalStorage();
 
+    // Normalize IDs to strings (Google Sheets converts numeric strings to numbers)
+    appData.courses.forEach(c => { c.id = String(c.id); });
+    appData.rounds.forEach(r => { r.id = String(r.id); r.courseId = String(r.courseId); });
+
+    // Auto-migrate courses missing tees structure (e.g., corrupted by old Google Sheets sync)
+    let migrated = false;
+    appData.courses.forEach(course => {
+        if (!course.tees) {
+            course.tees = {
+                red:   { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [], handicaps: [] },
+                white: { enabled: true, rating: course.rating || null, slope: course.slope || null, totalYardage: course.totalYardage || null, yardages: [], handicaps: [] },
+                blue:  { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [], handicaps: [] }
+            };
+            migrated = true;
+        }
+    });
+    if (migrated) saveToLocalStorage();
+
     // Add TEST course if it doesn't exist
     if (!appData.courses.find(c => c.name === 'TRU TEST Course')) {
         const testCourse = {
@@ -71,6 +89,17 @@ function showView(viewName) {
 
     if (viewName === 'dashboard') {
         renderDashboard();
+    } else if (viewName === 'new-round') {
+        if (appData.courses.length === 0 && !editingRoundId) {
+            document.getElementById('holeInputs').innerHTML = `
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="currentColor"><path d="M8,52 Q20,38 32,44 Q44,50 56,36" stroke="currentColor" stroke-width="3" fill="none" opacity="0.3"/><rect x="44" y="20" width="3" height="22" rx="1.5"/><polygon points="47,20 60,26 47,32"/><circle cx="20" cy="46" r="3" opacity="0.3"/></svg>
+                    <h3>Add a course first</h3>
+                    <p>Before you can log a round, you need to set up at least one course with hole details.</p>
+                    <button class="empty-state-cta" onclick="document.querySelectorAll('nav button')[2].click()">Go to Courses</button>
+                </div>
+            `;
+        }
     } else if (viewName === 'courses') {
         renderCourseList();
     } else if (viewName === 'settings') {
@@ -238,9 +267,49 @@ function updateHoleInputs() {
 function saveCourse() {
     const numHoles = parseInt(document.getElementById('courseHoles').value) || 18;
     const enabledTees = getEnabledTees();
+    const courseName = document.getElementById('courseName').value.trim();
+    const errors = [];
 
+    // Validate course name
+    if (!courseName) {
+        errors.push('Course name is required.');
+    }
+
+    // Validate at least one tee enabled
     if (enabledTees.length === 0) {
-        alert('Please enable at least one tee set.');
+        errors.push('Please enable at least one tee set.');
+    }
+
+    // Validate tee data for enabled tees
+    enabledTees.forEach(color => {
+        const cap = capitalize(color);
+        const label = TEE_LABELS[color];
+        const rating = parseFloat(document.getElementById(`teeRating${cap}`).value);
+        const slope = parseInt(document.getElementById(`teeSlope${cap}`).value);
+        const yardage = parseInt(document.getElementById(`teeYardage${cap}`).value);
+
+        if (rating && (rating < 55 || rating > 80)) {
+            errors.push(`${label} rating should be between 55 and 80.`);
+        }
+        if (slope && (slope < 55 || slope > 155)) {
+            errors.push(`${label} slope should be between 55 and 155.`);
+        }
+        if (yardage && yardage < 0) {
+            errors.push(`${label} yardage must be positive.`);
+        }
+    });
+
+    // Validate hole pars
+    for (let i = 1; i <= numHoles; i++) {
+        const par = parseInt(document.getElementById(`holePar${i}`).value);
+        if (par && (par < 3 || par > 5)) {
+            errors.push(`Hole ${i} par must be 3, 4, or 5.`);
+            break; // One message is enough
+        }
+    }
+
+    if (errors.length > 0) {
+        showAlert('courseModalAlert', errors.join('<br>'), 'error');
         return;
     }
 
@@ -280,7 +349,7 @@ function saveCourse() {
 
     const course = {
         id: editingCourseId || Date.now().toString(),
-        name: document.getElementById('courseName').value,
+        name: courseName,
         location: document.getElementById('courseLocation').value,
         numHoles: numHoles,
         holes: holes,
@@ -359,8 +428,16 @@ function editCourse(courseId) {
     document.getElementById('courseModal').classList.add('active');
 }
 
-function deleteCourse(courseId) {
-    if (confirm('Are you sure you want to delete this course?')) {
+async function deleteCourse(courseId) {
+    const course = appData.courses.find(c => c.id === courseId);
+    const name = course ? course.name : 'this course';
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Course',
+        message: `"${name}" and its hole data will be permanently removed. Rounds played here will keep their scores.`,
+        confirmText: 'Delete Course',
+        icon: '\uD83D\uDDD1\uFE0F'
+    });
+    if (confirmed) {
         appData.courses = appData.courses.filter(c => c.id !== courseId);
         saveToLocalStorage();
         syncToGoogleSheets();
@@ -375,8 +452,10 @@ function renderCourseList() {
     if (appData.courses.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="currentColor"><path d="M8,52 Q20,38 32,44 Q44,50 56,36" stroke="currentColor" stroke-width="3" fill="none" opacity="0.3"/><rect x="44" y="20" width="3" height="22" rx="1.5"/><polygon points="47,20 60,26 47,32"/><circle cx="20" cy="46" r="3" opacity="0.3"/></svg>
                 <h3>No courses yet</h3>
-                <p>Add your first course to start tracking rounds</p>
+                <p>Add your home course to get started. You can add hole details, multiple tee sets, and more.</p>
+                <button class="empty-state-cta" onclick="showAddCourseModal()">Add Your First Course</button>
             </div>
         `;
         return;
@@ -481,6 +560,7 @@ function loadCourseSelect() {
     const select = document.getElementById('courseSelect');
     select.innerHTML = '<option value="">Select a course...</option>' +
         appData.courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    loadCourseFilter();
 }
 
 function loadCourseData() {
@@ -685,7 +765,13 @@ function updatePenaltyStyle(holeNumber) {
 function saveRound() {
     const courseId = document.getElementById('courseSelect').value;
     if (!courseId) {
-        showAlert('roundAlert', 'Please select a course', 'error');
+        showAlert('roundAlert', 'Please select a course.', 'error');
+        return;
+    }
+
+    const roundDate = document.getElementById('roundDate').value;
+    if (!roundDate) {
+        showAlert('roundAlert', 'Please select a date.', 'error');
         return;
     }
 
@@ -693,13 +779,46 @@ function saveRound() {
     const numHoles = course.numHoles || course.holes.length;
     const holes = [];
     let totalScore = 0;
+    const errors = [];
 
     for (let i = 1; i <= numHoles; i++) {
         const score = parseInt(document.getElementById(`score${i}`).value);
         if (!score) {
-            showAlert('roundAlert', `Please enter score for hole ${i}`, 'error');
+            showAlert('roundAlert', `Please enter score for hole ${i}.`, 'error');
             return;
         }
+
+        if (score < 1 || score > 15) {
+            errors.push(`Hole ${i}: score ${score} seems unlikely (expected 1-15).`);
+        }
+
+        const putts = parseInt(document.getElementById(`putts${i}`).value) || 0;
+        if (putts > score) {
+            errors.push(`Hole ${i}: putts (${putts}) can't exceed score (${score}).`);
+        }
+        if (putts < 0) {
+            errors.push(`Hole ${i}: putts can't be negative.`);
+        }
+
+        const penalties = parseInt(document.getElementById(`penalties${i}`).value) || 0;
+        if (penalties < 0) {
+            errors.push(`Hole ${i}: penalties can't be negative.`);
+        }
+
+        // Validate putt distances are positive
+        const numPutts = putts;
+        for (let p = 1; p <= numPutts; p++) {
+            const distInput = document.getElementById(`puttDist${i}_${p}`);
+            if (distInput && distInput.value !== '') {
+                const dist = parseInt(distInput.value);
+                if (dist < 0) {
+                    errors.push(`Hole ${i}: putt distance can't be negative.`);
+                    break;
+                }
+            }
+        }
+
+        if (errors.length > 0) break; // Stop at first hole with errors
 
         // Get fairway selection
         const fairwayGroup = document.querySelector(`.button-group[data-hole="${i}"][data-type="fairway"]`);
@@ -716,9 +835,8 @@ function saveRound() {
             number: i,
             par: course.holes[i-1].par,
             score: score,
-            putts: parseInt(document.getElementById(`putts${i}`).value) || 0,
+            putts: putts,
             puttDistances: (() => {
-                const numPutts = parseInt(document.getElementById(`putts${i}`).value) || 0;
                 const distances = [];
                 for (let p = 1; p <= numPutts; p++) {
                     const distInput = document.getElementById(`puttDist${i}_${p}`);
@@ -730,13 +848,18 @@ function saveRound() {
                 }
                 return distances;
             })(),
-            penalties: parseInt(document.getElementById(`penalties${i}`).value) || 0,
+            penalties: penalties,
             fairwayHit: fairwayValue === 'hit',
             fairwayDirection: fairwayValue, // 'left', 'hit', 'right', or null
             gir: approachValue === 'gir',
             approachResult: approachValue, // 'gir', 'long', 'short', 'left', 'right', or null
             bunker: document.getElementById(`bunker${i}`).checked
         });
+    }
+
+    if (errors.length > 0) {
+        showAlert('roundAlert', errors.join('<br>'), 'error');
+        return;
     }
 
     // Get rating/slope from selected tee
@@ -791,12 +914,25 @@ function renderDashboard() {
 
     if (rounds.length === 0) {
         document.getElementById('dashboardContent').innerHTML = '';
-        document.getElementById('roundsList').innerHTML = `
-            <div class="empty-state">
-                <h3>No rounds recorded yet</h3>
-                <p>Log your first round to see your stats</p>
-            </div>
-        `;
+        if (appData.courses.length === 0) {
+            document.getElementById('roundsList').innerHTML = `
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="currentColor"><rect x="30" y="8" width="3" height="48" rx="1.5"/><polygon points="33,8 54,17 33,26"/><ellipse cx="31" cy="56" rx="14" ry="4" opacity="0.3"/></svg>
+                    <h3>Welcome to Golf Stats Tracker</h3>
+                    <p>Start by adding a course, then log your first round to see your stats come to life.</p>
+                    <button class="empty-state-cta" onclick="document.querySelectorAll('nav button')[2].click()">Add Your First Course</button>
+                </div>
+            `;
+        } else {
+            document.getElementById('roundsList').innerHTML = `
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="currentColor"><rect x="30" y="8" width="3" height="48" rx="1.5"/><polygon points="33,8 54,17 33,26"/><ellipse cx="31" cy="56" rx="14" ry="4" opacity="0.3"/></svg>
+                    <h3>No rounds recorded yet</h3>
+                    <p>You have ${appData.courses.length} course${appData.courses.length !== 1 ? 's' : ''} set up. Log your first round to start tracking your game.</p>
+                    <button class="empty-state-cta" onclick="document.querySelectorAll('nav button')[1].click()">Log a Round</button>
+                </div>
+            `;
+        }
         return;
     }
 
@@ -850,12 +986,12 @@ function renderDashboard() {
     const overviewHtml = `
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-label">Handicap Index</div>
+                <div class="stat-label">Handicap Index ${trendIcon('handicap')}</div>
                 <div class="stat-value">${val(handicap)}</div>
                 <div class="stat-subtext">USGA Formula</div>
             </div>
             <div class="stat-card ${asGoal.cls}">
-                <div class="stat-label">Avg Score</div>
+                <div class="stat-label">Avg Score ${trendIcon('avgScore')}</div>
                 <div class="stat-value">${val(stats.avgScore)}</div>
                 <div class="stat-subtext">Per round</div>
                 ${asGoal.badge}
@@ -887,7 +1023,7 @@ function renderDashboard() {
             <div class="section-stats" style="margin-bottom:15px;">
                 <div class="section-stat ${fwyGoal.cls}">
                     <div class="section-stat-value">${pct(stats.fairwayPct)}</div>
-                    <div class="section-stat-label">Fairways Hit</div>
+                    <div class="section-stat-label">Fairways Hit ${trendIcon('fairwayPct')}</div>
                     ${fwyGoal.badge}
                 </div>
             </div>
@@ -921,7 +1057,7 @@ function renderDashboard() {
             <div class="section-stats" style="margin-bottom:15px;">
                 <div class="section-stat ${girGoal.cls}">
                     <div class="section-stat-value">${pct(stats.girPct)}</div>
-                    <div class="section-stat-label">Greens in Reg</div>
+                    <div class="section-stat-label">Greens in Reg ${trendIcon('girPct')}</div>
                     ${girGoal.badge}
                 </div>
                 <div class="section-stat ${proxGoal.cls}">
@@ -931,7 +1067,7 @@ function renderDashboard() {
                 </div>
                 <div class="section-stat ${scrGoal.cls}">
                     <div class="section-stat-value">${pct(stats.scramblingPct)}</div>
-                    <div class="section-stat-label">Scrambling</div>
+                    <div class="section-stat-label">Scrambling ${trendIcon('scramblingPct')}</div>
                     ${scrGoal.badge}
                 </div>
                 <div class="section-stat ${ssGoal.cls}">
@@ -994,7 +1130,7 @@ function renderDashboard() {
             <div class="section-stats" style="margin-bottom:15px;">
                 <div class="section-stat ${putGoal.cls}">
                     <div class="section-stat-value">${val(stats.puttsPer9)}</div>
-                    <div class="section-stat-label">Putts / 9</div>
+                    <div class="section-stat-label">Putts / 9 ${trendIcon('puttsPer9')}</div>
                     ${putGoal.badge}
                 </div>
                 <div class="section-stat ${ftGoal.cls}">
@@ -1140,8 +1276,21 @@ function getFilteredRounds() {
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
     const count = document.getElementById('filterRounds').value;
+    const courseId = document.getElementById('filterCourse').value;
+    const roundType = document.getElementById('filterRoundType').value;
 
-    return filterRounds(appData.rounds, { startDate, endDate, count });
+    return filterRounds(appData.rounds, { startDate, endDate, count, courseId, roundType });
+}
+
+function loadCourseFilter() {
+    const select = document.getElementById('filterCourse');
+    const current = select.value;
+    select.innerHTML = '<option value="all">All Courses</option>' +
+        appData.courses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    // Preserve selection if the course still exists
+    if (current && select.querySelector(`option[value="${current}"]`)) {
+        select.value = current;
+    }
 }
 
 function applyFilters() {
@@ -1294,6 +1443,131 @@ function viewAllRounds() {
 
 function closeAllRoundsModal() {
     document.getElementById('allRoundsModal').classList.remove('active');
+}
+
+// Trend Chart Modal
+let trendChartInstance = null;
+
+function trendIcon(kpiKey) {
+    return `<button class="trend-icon-btn" onclick="event.stopPropagation(); viewTrendModal('${kpiKey}')" title="View trend">
+        <svg class="trend-icon" viewBox="0 0 20 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1,14 6,9 10,11 19,2"/>
+            <polyline points="14,2 19,2 19,7"/>
+        </svg>
+    </button>`;
+}
+
+function viewTrendModal(kpiKey) {
+    const def = TREND_KPIS[kpiKey];
+    if (!def) return;
+
+    const rounds = kpiKey === 'handicap' ? appData.rounds : getFilteredRounds();
+    const trendData = computeTrendData(rounds, kpiKey);
+    const maData = computeMovingAverage(trendData, 5);
+
+    // Combine and filter to points where raw data exists
+    const chartPoints = trendData
+        .map((d, i) => ({ date: d.date, raw: d.value, ma: maData[i].value }))
+        .filter(p => p.raw !== null);
+
+    document.getElementById('trendModalTitle').textContent = def.label + ' Trend';
+
+    if (chartPoints.length < 2) {
+        document.getElementById('trendModalBody').innerHTML =
+            '<div style="text-align:center;padding:40px;color:var(--text-light);">Not enough data for a trend chart (need at least 2 rounds with data).</div>';
+        document.getElementById('trendModal').classList.add('active');
+        return;
+    }
+
+    const formatDate = (iso) => {
+        const d = new Date(iso + 'T12:00:00');
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    };
+
+    // Rebuild canvas for clean chart
+    document.getElementById('trendModalBody').innerHTML = '<canvas id="trendChart"></canvas>';
+    const canvas = document.getElementById('trendChart');
+
+    if (trendChartInstance) {
+        trendChartInstance.destroy();
+        trendChartInstance = null;
+    }
+
+    // Show modal first so canvas has dimensions
+    document.getElementById('trendModal').classList.add('active');
+
+    requestAnimationFrame(() => {
+        trendChartInstance = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: chartPoints.map(p => formatDate(p.date)),
+                datasets: [
+                    {
+                        label: def.label,
+                        data: chartPoints.map(p => p.raw),
+                        borderColor: '#5b8fa3',
+                        backgroundColor: 'rgba(91,143,163,0.1)',
+                        borderWidth: 1.5,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#5b8fa3',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 1.5,
+                        tension: 0,
+                        fill: false,
+                        order: 2
+                    },
+                    {
+                        label: '5-Round Avg',
+                        data: chartPoints.map(p => p.ma),
+                        borderColor: '#1a4d2e',
+                        backgroundColor: 'transparent',
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: false,
+                        spanGaps: true,
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ctx.dataset.label + ': ' + ctx.parsed.y + def.unit
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { usePointStyle: true, font: { family: 'Montserrat', size: 12 } }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { maxRotation: 45, font: { family: 'Montserrat', size: 11 } },
+                        grid: { display: false }
+                    },
+                    y: {
+                        ticks: { font: { family: 'Montserrat', size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.06)' }
+                    }
+                }
+            }
+        });
+    });
+}
+
+function closeTrendModal() {
+    document.getElementById('trendModal').classList.remove('active');
+    if (trendChartInstance) {
+        trendChartInstance.destroy();
+        trendChartInstance = null;
+    }
 }
 
 // Course Detail Modal
@@ -1508,8 +1782,16 @@ function closeCourseDetailModal() {
     document.getElementById('courseDetailModal').classList.remove('active');
 }
 
-function deleteRound(roundId) {
-    if (confirm('Are you sure you want to delete this round?')) {
+async function deleteRound(roundId) {
+    const round = appData.rounds.find(r => r.id === roundId);
+    const label = round ? `${round.courseName} on ${round.date}` : 'this round';
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Round',
+        message: `${label} will be permanently removed. This cannot be undone.`,
+        confirmText: 'Delete Round',
+        icon: '\uD83D\uDDD1\uFE0F'
+    });
+    if (confirmed) {
         appData.rounds = appData.rounds.filter(r => r.id !== roundId);
         saveToLocalStorage();
         syncToGoogleSheets();
@@ -1604,9 +1886,40 @@ function showAlert(containerId, message, type) {
     setTimeout(() => { container.innerHTML = ''; }, 5000);
 }
 
+function showConfirmDialog({ title, message, confirmText, icon }) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('confirmModal');
+        document.getElementById('confirmIcon').textContent = icon || '\u26A0\uFE0F';
+        document.getElementById('confirmTitle').textContent = title || 'Are you sure?';
+        document.getElementById('confirmMessage').textContent = message || '';
+        document.getElementById('confirmOkBtn').textContent = confirmText || 'Delete';
+        modal.classList.add('active');
+
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        function cleanup(result) {
+            modal.classList.remove('active');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            resolve(result);
+        }
+        function onOk() { cleanup(true); }
+        function onCancel() { cleanup(false); }
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+    });
+}
+
 // Settings management
 function saveSettings() {
-    appData.settings.webAppUrl = document.getElementById('webAppUrl').value.trim();
+    const url = document.getElementById('webAppUrl').value.trim();
+    if (url && !url.startsWith('https://')) {
+        showAlert('settingsAlert', 'Web App URL must start with https://', 'error');
+        return;
+    }
+    appData.settings.webAppUrl = url;
     saveToLocalStorage();
     showAlert('settingsAlert', 'Settings saved successfully!', 'success');
 }
@@ -1638,29 +1951,51 @@ function renderGoalsForm() {
 
 function saveGoals() {
     const goals = {};
+    const errors = [];
     Object.entries(GOAL_DEFS).forEach(([key, def]) => {
         const targetInput = document.getElementById(`goalTarget_${key}`);
         const bufferInput = document.getElementById(`goalBuffer_${key}`);
         const target = targetInput.value.trim();
         const buffer = bufferInput.value.trim();
         if (target !== '') {
-            goals[key] = {
-                target: parseFloat(target),
-                buffer: buffer !== '' ? parseFloat(buffer) : def.buffer
-            };
+            const targetNum = parseFloat(target);
+            const bufferNum = buffer !== '' ? parseFloat(buffer) : def.buffer;
+            if (isNaN(targetNum)) {
+                errors.push(`${def.label}: target must be a number.`);
+            } else if (buffer !== '' && (isNaN(bufferNum) || bufferNum < 0)) {
+                errors.push(`${def.label}: threshold must be a positive number.`);
+            } else {
+                goals[key] = { target: targetNum, buffer: bufferNum };
+            }
         }
     });
+    if (errors.length > 0) {
+        showAlert('goalsAlert', errors.join('<br>'), 'error');
+        return;
+    }
     appData.settings.goals = goals;
     saveToLocalStorage();
     showAlert('goalsAlert', 'Goals saved!', 'success');
 }
 
-function testConnection() {
+async function testConnection() {
     if (!appData.settings.webAppUrl) {
         showAlert('settingsAlert', 'Please enter your Apps Script Web App URL', 'error');
         return;
     }
-    syncFromGoogleSheets();
+    try {
+        const response = await fetch(appData.settings.webAppUrl);
+        const result = await response.json();
+        if (result.success) {
+            const c = result.data.courses ? result.data.courses.length : 0;
+            const r = result.data.rounds ? result.data.rounds.length : 0;
+            showAlert('settingsAlert', `Connected! Sheet has ${c} course(s) and ${r} round(s).`, 'success');
+        } else {
+            showAlert('settingsAlert', 'Connection failed: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showAlert('settingsAlert', 'Connection failed: ' + error.message, 'error');
+    }
 }
 
 // Google Sheets sync via Apps Script web app
@@ -1728,16 +2063,72 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
-function clearAllData() {
-    if (confirm('Are you sure you want to clear ALL data? This cannot be undone.')) {
-        if (confirm('This will delete all courses and rounds. Are you REALLY sure?')) {
-            appData = { courses: [], rounds: [], settings: appData.settings };
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+
+            // Validate structure
+            if (!data.courses || !Array.isArray(data.courses)) {
+                showAlert('importAlert', 'Invalid file: missing courses array.', 'error');
+                return;
+            }
+            if (!data.rounds || !Array.isArray(data.rounds)) {
+                showAlert('importAlert', 'Invalid file: missing rounds array.', 'error');
+                return;
+            }
+
+            const courseCount = data.courses.length;
+            const roundCount = data.rounds.length;
+
+            const confirmed = await showConfirmDialog({
+                title: 'Import Data',
+                message: `This will replace ALL current data with ${courseCount} course(s) and ${roundCount} round(s). Current data will be lost.`,
+                confirmText: 'Import',
+                icon: '\uD83D\uDCE5'
+            });
+            if (!confirmed) return;
+
+            appData.courses = data.courses;
+            appData.rounds = data.rounds;
+            if (data.settings) {
+                appData.settings = { ...appData.settings, ...data.settings };
+            }
+
             saveToLocalStorage();
             renderCourseList();
             loadCourseSelect();
             renderDashboard();
-            showAlert('settingsAlert', 'All data has been cleared.', 'success');
+            renderGoalsForm();
+            showAlert('importAlert', `Imported ${courseCount} course(s) and ${roundCount} round(s) successfully.`, 'success');
+        } catch (err) {
+            showAlert('importAlert', 'Failed to parse file. Make sure it is a valid JSON export.', 'error');
         }
+    };
+    reader.readAsText(file);
+
+    // Reset file input so the same file can be re-imported
+    event.target.value = '';
+}
+
+async function clearAllData() {
+    const confirmed = await showConfirmDialog({
+        title: 'Clear All Data',
+        message: 'This will permanently delete ALL courses and rounds. This cannot be undone.',
+        confirmText: 'Clear Everything',
+        icon: '\u26A0\uFE0F'
+    });
+    if (confirmed) {
+        appData = { courses: [], rounds: [], settings: appData.settings };
+        saveToLocalStorage();
+        renderCourseList();
+        loadCourseSelect();
+        renderDashboard();
+        showAlert('settingsAlert', 'All data has been cleared.', 'success');
     }
 }
 

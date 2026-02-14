@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { computeStats, computeHandicap, filterRounds, buildRoundSummary, reorderArray, GOAL_DEFS, getGoalStatus } = require('../js/stats.js');
+const { computeStats, computeHandicap, filterRounds, buildRoundSummary, reorderArray, GOAL_DEFS, getGoalStatus, TREND_KPIS, computeTrendData, computeMovingAverage } = require('../js/stats.js');
 
 // Helper: create a minimal hole object
 function makeHole(overrides = {}) {
@@ -708,6 +708,84 @@ describe('filterRounds', () => {
         filterRounds(rounds, { count: '2' });
         expect(rounds).toEqual(original);
     });
+
+    // ─── Course filter ───────────────────────────────────────
+
+    it('filters by courseId', () => {
+        const mixed = [
+            makeRound({ id: 'a', courseId: 'c1', date: '2025-01-10' }),
+            makeRound({ id: 'b', courseId: 'c2', date: '2025-02-10' }),
+            makeRound({ id: 'c', courseId: 'c1', date: '2025-03-10' }),
+        ];
+        const result = filterRounds(mixed, { courseId: 'c1' });
+        expect(result).toHaveLength(2);
+        expect(result.every(r => r.courseId === 'c1')).toBe(true);
+    });
+
+    it('passes through courseId="all" without filtering', () => {
+        const mixed = [
+            makeRound({ id: 'a', courseId: 'c1', date: '2025-01-10' }),
+            makeRound({ id: 'b', courseId: 'c2', date: '2025-02-10' }),
+        ];
+        const result = filterRounds(mixed, { courseId: 'all' });
+        expect(result).toHaveLength(2);
+    });
+
+    // ─── Round type filter ───────────────────────────────────
+
+    it('filters by roundType', () => {
+        const mixed = [
+            makeRound({ id: 'a', roundType: 'normal', date: '2025-01-10' }),
+            makeRound({ id: 'b', roundType: 'league', date: '2025-02-10' }),
+            makeRound({ id: 'c', roundType: 'normal', date: '2025-03-10' }),
+        ];
+        const result = filterRounds(mixed, { roundType: 'league' });
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('b');
+    });
+
+    it('treats missing roundType as "normal"', () => {
+        const mixed = [
+            makeRound({ id: 'a', date: '2025-01-10' }), // no roundType → defaults to normal
+            makeRound({ id: 'b', roundType: 'league', date: '2025-02-10' }),
+        ];
+        const result = filterRounds(mixed, { roundType: 'normal' });
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('a');
+    });
+
+    it('passes through roundType="all" without filtering', () => {
+        const mixed = [
+            makeRound({ id: 'a', roundType: 'normal', date: '2025-01-10' }),
+            makeRound({ id: 'b', roundType: 'league', date: '2025-02-10' }),
+        ];
+        const result = filterRounds(mixed, { roundType: 'all' });
+        expect(result).toHaveLength(2);
+    });
+
+    it('combines courseId and roundType filters', () => {
+        const mixed = [
+            makeRound({ id: 'a', courseId: 'c1', roundType: 'normal', date: '2025-01-10' }),
+            makeRound({ id: 'b', courseId: 'c1', roundType: 'league', date: '2025-02-10' }),
+            makeRound({ id: 'c', courseId: 'c2', roundType: 'league', date: '2025-03-10' }),
+            makeRound({ id: 'd', courseId: 'c2', roundType: 'normal', date: '2025-04-10' }),
+        ];
+        const result = filterRounds(mixed, { courseId: 'c1', roundType: 'league' });
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('b');
+    });
+
+    it('combines courseId, roundType, and count', () => {
+        const mixed = [
+            makeRound({ id: 'a', courseId: 'c1', roundType: 'league', date: '2025-01-10' }),
+            makeRound({ id: 'b', courseId: 'c1', roundType: 'league', date: '2025-02-10' }),
+            makeRound({ id: 'c', courseId: 'c1', roundType: 'league', date: '2025-03-10' }),
+        ];
+        const result = filterRounds(mixed, { courseId: 'c1', roundType: 'league', count: '2' });
+        expect(result).toHaveLength(2);
+        expect(result[0].id).toBe('c'); // most recent first
+        expect(result[1].id).toBe('b');
+    });
 });
 
 // ─── buildRoundSummary ──────────────────────────────────────
@@ -925,5 +1003,138 @@ describe('GOAL_DEFS', () => {
             expect(['higher', 'lower']).toContain(def.direction);
             expect(def.buffer).toBeGreaterThan(0);
         }
+    });
+});
+
+// ─── computeTrendData ───────────────────────────────────────
+
+describe('computeTrendData', () => {
+    it('returns empty array for no rounds', () => {
+        expect(computeTrendData([], 'avgScore')).toEqual([]);
+        expect(computeTrendData(null, 'avgScore')).toEqual([]);
+    });
+
+    it('returns empty array for invalid kpiKey', () => {
+        expect(computeTrendData([makeRound()], 'bogusKey')).toEqual([]);
+    });
+
+    it('returns per-round avgScore sorted oldest-first', () => {
+        const rounds = [
+            makeRound({ id: '2', date: '2025-07-01', totalScore: 42 }),
+            makeRound({ id: '1', date: '2025-06-15', totalScore: 40 }),
+        ];
+        const result = computeTrendData(rounds, 'avgScore');
+        expect(result).toHaveLength(2);
+        expect(result[0].date).toBe('2025-06-15');
+        expect(result[0].value).toBe(40);
+        expect(result[1].date).toBe('2025-07-01');
+        expect(result[1].value).toBe(42);
+    });
+
+    it('returns per-round puttsPer9', () => {
+        const round = makeRound({ date: '2025-06-15' });
+        // Default holes: putts 2,1,2,2,3,2,1,2,2 = 17 total, 9 holes → 17/9*9 = 17.0
+        const result = computeTrendData([round], 'puttsPer9');
+        expect(result).toHaveLength(1);
+        expect(result[0].value).toBe(17);
+    });
+
+    it('returns per-round fairwayPct', () => {
+        const round = makeRound({ date: '2025-06-15' });
+        // Default: 7 non-par-3 holes, 4 fairways hit → 57%
+        const result = computeTrendData([round], 'fairwayPct');
+        expect(result).toHaveLength(1);
+        expect(result[0].value).toBe(57);
+    });
+
+    it('returns null for fairway on par-3-only round', () => {
+        const par3Round = makeRound({
+            date: '2025-06-15',
+            numHoles: 1,
+            holes: [makeHole({ number: 1, par: 3, score: 3, fairwayHit: false, fairwayDirection: null })],
+            totalScore: 3
+        });
+        const result = computeTrendData([par3Round], 'fairwayPct');
+        expect(result[0].value).toBeNull();
+    });
+
+    it('computes rolling handicap trend', () => {
+        const rounds = [
+            makeRound({ id: '1', date: '2025-06-01', totalScore: 40, courseRating: 35.5, slopeRating: 113 }),
+            makeRound({ id: '2', date: '2025-06-08', totalScore: 42, courseRating: 35.5, slopeRating: 113 }),
+            makeRound({ id: '3', date: '2025-06-15', totalScore: 38, courseRating: 35.5, slopeRating: 113 }),
+        ];
+        const result = computeTrendData(rounds, 'handicap');
+        expect(result).toHaveLength(3);
+        // First two: < 3 eligible → null
+        expect(result[0].value).toBeNull();
+        expect(result[1].value).toBeNull();
+        // Third: 3 eligible → real number
+        expect(result[2].value).not.toBeNull();
+        expect(typeof result[2].value).toBe('number');
+    });
+
+    it('TREND_KPIS has 6 entries', () => {
+        expect(Object.keys(TREND_KPIS)).toHaveLength(6);
+    });
+});
+
+// ─── computeMovingAverage ───────────────────────────────────
+
+describe('computeMovingAverage', () => {
+    it('returns empty array for empty input', () => {
+        expect(computeMovingAverage([], 5)).toEqual([]);
+    });
+
+    it('handles single data point', () => {
+        const data = [{ date: '2025-06-15', value: 40 }];
+        const result = computeMovingAverage(data, 5);
+        expect(result).toHaveLength(1);
+        expect(result[0].value).toBe(40);
+    });
+
+    it('computes correct moving average with window of 3', () => {
+        const data = [
+            { date: '2025-06-01', value: 40 },
+            { date: '2025-06-08', value: 42 },
+            { date: '2025-06-15', value: 38 },
+            { date: '2025-06-22', value: 44 },
+        ];
+        const result = computeMovingAverage(data, 3);
+        expect(result[0].value).toBe(40);       // [40] → 40
+        expect(result[1].value).toBe(41);        // [42, 40] → 41
+        expect(result[2].value).toBe(40);        // [38, 42, 40] → 40
+        expect(result[3].value).toBe(41.3);      // [44, 38, 42] → 41.33 → 41.3
+    });
+
+    it('skips null values in window', () => {
+        const data = [
+            { date: '2025-06-01', value: 40 },
+            { date: '2025-06-08', value: null },
+            { date: '2025-06-15', value: 38 },
+        ];
+        const result = computeMovingAverage(data, 3);
+        // idx 2: finds 38 (idx2), skips null (idx1), finds 40 (idx0) → (38+40)/2 = 39
+        expect(result[2].value).toBe(39);
+    });
+
+    it('returns null for all-null input', () => {
+        const data = [
+            { date: '2025-06-01', value: null },
+            { date: '2025-06-08', value: null },
+        ];
+        const result = computeMovingAverage(data, 5);
+        expect(result[0].value).toBeNull();
+        expect(result[1].value).toBeNull();
+    });
+
+    it('defaults to window of 5', () => {
+        const data = Array.from({ length: 7 }, (_, i) => ({ date: `2025-06-${String(i + 1).padStart(2, '0')}`, value: 10 * (i + 1) }));
+        // values: 10, 20, 30, 40, 50, 60, 70
+        const result = computeMovingAverage(data);
+        // idx 4: [50, 40, 30, 20, 10] → 30
+        expect(result[4].value).toBe(30);
+        // idx 6: [70, 60, 50, 40, 30] → 50
+        expect(result[6].value).toBe(50);
     });
 });

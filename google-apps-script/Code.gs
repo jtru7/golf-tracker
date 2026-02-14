@@ -25,17 +25,33 @@ function doGet(e) {
     // Read Courses sheet
     var coursesSheet = ss.getSheetByName('Courses');
     if (coursesSheet && coursesSheet.getLastRow() > 1) {
-      var coursesData = coursesSheet.getRange(2, 1, coursesSheet.getLastRow() - 1, 8).getValues();
+      var numCols = coursesSheet.getLastColumn();
+      var coursesData = coursesSheet.getRange(2, 1, coursesSheet.getLastRow() - 1, numCols).getValues();
       result.courses = coursesData.map(function(row) {
+        // New format (6 columns): ID, Name, Location, Holes, Tees JSON, Hole Data
+        if (numCols >= 6 && typeof row[4] === 'string' && row[4].charAt(0) === '{') {
+          return {
+            id: String(row[0]),
+            name: row[1],
+            location: row[2],
+            numHoles: parseInt(row[3]) || 9,
+            tees: JSON.parse(row[4] || '{}'),
+            holes: JSON.parse(row[5] || '[]')
+          };
+        }
+        // Old format (8 columns): ID, Name, Location, Holes, Rating, Slope, Yardage, Hole Data
+        // Migrate to tees.white on read
         return {
           id: row[0],
           name: row[1],
           location: row[2],
-          numHoles: parseInt(row[3]) || 18,
-          rating: parseFloat(row[4]) || 72,
-          slope: parseInt(row[5]) || 113,
-          totalYardage: parseInt(row[6]) || 0,
-          holes: JSON.parse(row[7] || '[]')
+          numHoles: parseInt(row[3]) || 9,
+          tees: {
+            red:   { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [], handicaps: [] },
+            white: { enabled: true, rating: parseFloat(row[4]) || null, slope: parseInt(row[5]) || null, totalYardage: parseInt(row[6]) || null, yardages: [], handicaps: [] },
+            blue:  { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [], handicaps: [] }
+          },
+          holes: JSON.parse(row[numCols >= 8 ? 7 : 5] || '[]')
         };
       });
     }
@@ -43,17 +59,37 @@ function doGet(e) {
     // Read Rounds sheet
     var roundsSheet = ss.getSheetByName('Rounds');
     if (roundsSheet && roundsSheet.getLastRow() > 1) {
-      var roundsData = roundsSheet.getRange(2, 1, roundsSheet.getLastRow() - 1, 9).getValues();
+      var numRoundCols = roundsSheet.getLastColumn();
+      var roundsData = roundsSheet.getRange(2, 1, roundsSheet.getLastRow() - 1, numRoundCols).getValues();
       result.rounds = roundsData.map(function(row) {
+        // New format (11 columns): ID, Course ID, Course Name, Date, Tees, Num Holes, Round Type, Score, Rating, Slope, Hole Data
+        if (numRoundCols >= 11) {
+          return {
+            id: String(row[0]),
+            courseId: String(row[1]),
+            courseName: row[2],
+            date: row[3] instanceof Date ? row[3].toISOString().split('T')[0] : String(row[3]),
+            tees: row[4],
+            numHoles: parseInt(row[5]) || 9,
+            roundType: row[6] || 'normal',
+            totalScore: parseInt(row[7]) || 0,
+            courseRating: parseFloat(row[8]) || null,
+            slopeRating: parseInt(row[9]) || null,
+            holes: JSON.parse(row[10] || '[]')
+          };
+        }
+        // Old format (9 columns): ID, Course ID, Course Name, Date, Tees, Score, Rating, Slope, Hole Data
         return {
           id: row[0],
           courseId: row[1],
           courseName: row[2],
-          date: row[3],
+          date: row[3] instanceof Date ? row[3].toISOString().split('T')[0] : String(row[3]),
           tees: row[4],
+          numHoles: 9,
+          roundType: 'normal',
           totalScore: parseInt(row[5]) || 0,
-          courseRating: parseFloat(row[6]) || 72,
-          slopeRating: parseInt(row[7]) || 113,
+          courseRating: parseFloat(row[6]) || null,
+          slopeRating: parseInt(row[7]) || null,
           holes: JSON.parse(row[8] || '[]')
         };
       });
@@ -78,39 +114,64 @@ function doPost(e) {
 
     // Write courses
     if (payload.courses) {
-      var coursesSheet = getOrCreateSheet(ss, 'Courses',
-        ['ID', 'Name', 'Location', 'Holes', 'Rating', 'Slope', 'Yardage', 'Hole Data']);
+      var courseHeaders = ['ID', 'Name', 'Location', 'Holes', 'Tees Data', 'Hole Data'];
+      var coursesSheet = getOrCreateSheet(ss, 'Courses', courseHeaders);
 
       // Clear existing data (keep header)
       if (coursesSheet.getLastRow() > 1) {
-        coursesSheet.getRange(2, 1, coursesSheet.getLastRow() - 1, 8).clear();
+        coursesSheet.getRange(2, 1, coursesSheet.getLastRow() - 1, coursesSheet.getLastColumn()).clear();
       }
+
+      // Update headers if column count changed (old → new format)
+      coursesSheet.getRange(1, 1, 1, courseHeaders.length).setValues([courseHeaders]);
 
       // Write new data
       if (payload.courses.length > 0) {
         var courseRows = payload.courses.map(function(c) {
-          return [c.id, c.name, c.location, c.numHoles, c.rating, c.slope, c.totalYardage, JSON.stringify(c.holes)];
+          return [
+            c.id,
+            c.name,
+            c.location,
+            c.numHoles,
+            JSON.stringify(c.tees || {}),
+            JSON.stringify(c.holes)
+          ];
         });
-        coursesSheet.getRange(2, 1, courseRows.length, 8).setValues(courseRows);
+        coursesSheet.getRange(2, 1, courseRows.length, 6).setValues(courseRows);
       }
     }
 
     // Write rounds
     if (payload.rounds) {
-      var roundsSheet = getOrCreateSheet(ss, 'Rounds',
-        ['ID', 'Course ID', 'Course Name', 'Date', 'Tees', 'Score', 'Rating', 'Slope', 'Hole Data']);
+      var roundHeaders = ['ID', 'Course ID', 'Course Name', 'Date', 'Tees', 'Num Holes', 'Round Type', 'Score', 'Rating', 'Slope', 'Hole Data'];
+      var roundsSheet = getOrCreateSheet(ss, 'Rounds', roundHeaders);
 
       // Clear existing data (keep header)
       if (roundsSheet.getLastRow() > 1) {
-        roundsSheet.getRange(2, 1, roundsSheet.getLastRow() - 1, 9).clear();
+        roundsSheet.getRange(2, 1, roundsSheet.getLastRow() - 1, roundsSheet.getLastColumn()).clear();
       }
+
+      // Update headers if column count changed (old → new format)
+      roundsSheet.getRange(1, 1, 1, roundHeaders.length).setValues([roundHeaders]);
 
       // Write new data
       if (payload.rounds.length > 0) {
         var roundRows = payload.rounds.map(function(r) {
-          return [r.id, r.courseId, r.courseName, r.date, r.tees, r.totalScore, r.courseRating, r.slopeRating, JSON.stringify(r.holes)];
+          return [
+            r.id,
+            r.courseId,
+            r.courseName,
+            r.date,
+            r.tees,
+            r.numHoles || 9,
+            r.roundType || 'normal',
+            r.totalScore,
+            r.courseRating,
+            r.slopeRating,
+            JSON.stringify(r.holes)
+          ];
         });
-        roundsSheet.getRange(2, 1, roundRows.length, 9).setValues(roundRows);
+        roundsSheet.getRange(2, 1, roundRows.length, 11).setValues(roundRows);
       }
     }
 
