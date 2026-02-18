@@ -93,12 +93,12 @@ All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole 
 - **Dashboard with 6 KPI sections**: Overview, Off the Tee, Approach Play, Putting, Scoring, Match Play (conditional) — all dynamically rendered with distribution bars
 - **KPI Goals**: Set personal targets for 16 KPIs in Settings with customizable thresholds. Dashboard cards show color-coded backgrounds (dark green = well above, light green = at goal, yellow = slightly below, red = well below). Configured via `GOAL_DEFS` in stats.js, rendered by `goalBadge()` helper in renderDashboard(), managed by `renderGoalsForm()` / `saveGoals()` in Settings. Goals stored in `appData.settings.goals`.
 - **Putting Analytics**: Par Conversion moved to Putting section. Putt Make Rate by Distance table (6 buckets: inside 3ft / 3-6 / 6-10 / 10-15 / 15-20 / 20+). Lag Putting cards (3-Putt Avoidance %, Avg Lag Leave ft) for first putts 20+ ft.
-- **Course Detail Modal**: click a course → modal with course-level KPIs, hole difficulty ranking, and hole-by-hole breakdown table (scoring avg, distribution, fairway %, GIR %, avg putts, miss direction arrows)
+- **Course Detail Modal**: click a course → modal with course-level KPIs, hole difficulty ranking, and hole-by-hole breakdown table (scoring avg, distribution, fairway %, GIR %, avg putts, miss direction arrows). Includes conditional Match Play section with W-D-L record, total points, hole win %, and per-hole W/D/L percentages in the breakdown table.
 - **Course drag-and-drop reordering**: Drag handle on course cards, `reorderArray()` utility in stats.js, container-level event prevention to avoid DOM nesting
 - **Chart.js Trendlines**: 6 KPIs (Score, Putts/9, Fairway %, GIR %, Scrambling %, Handicap) have a trend icon on their dashboard card. Clicking opens a modal with a Chart.js line chart showing raw per-round data overlaid with a 5-round moving average. `TREND_KPIS` constant, `computeTrendData()`, and `computeMovingAverage()` in stats.js. Handicap trend uses all rounds; other KPIs respect dashboard filters.
 - **Recent Rounds**: Dashboard shows last 20 rounds; "View All Rounds" button opens modal with full scrollable list. `renderRoundItem()` extracted as reusable function.
 - `computeCourseStats()` in stats.js — per-course and per-hole aggregation, delegates to `computeStats()` for dashboard-style KPIs
-- **Match Play**: 5th round type with per-hole Win/Draw/Loss tracking. W/D/L toggle appears on hole cards for League Match and Match Play round types. `computeMatchPlayStats()` in stats.js computes points (W=1, D=0.5, L=0), win %, and per-9 normalization. Dashboard shows Match Play section only when match data exists.
+- **Match Play**: 5th round type with per-hole Win/Draw/Loss tracking. W/D/L toggle appears on hole cards for League Match and Match Play round types. `computeMatchPlayStats()` in stats.js computes points (W=1, D=0.5, L=0), win %, and per-9 normalization. Dashboard shows Match Play section only when match data exists. Round detail scorecard shows colored Match row (W/D/L) between Score and Putts. Course detail modal shows per-course match play stats and per-hole W/D/L %.
 - Round types: Normal, League Match, Match Play, Casual, Scramble (Normal, League, Match Play count toward handicap)
 - Editable rounds: click a round → detail modal → Edit button → pre-populated form
 - Multi-tee course setup (Red/White/Blue with per-tee rating, slope, yardage, hole handicaps)
@@ -110,7 +110,6 @@ All stats normalized **per 9 holes** where applicable (user plays 80-85% 9-hole 
 - **Dark Mode**: Light/Dark theme toggle in Settings. Uses `[data-theme="dark"]` on `<html>` to override 21 CSS custom properties. `applyTheme()` / `changeTheme()` in app.js. Chart.js colors read from CSS variables via `getComputedStyle()`. Theme persisted in `appData.settings.theme`. Tee colors (red/white/blue) stay fixed as golf standards.
 
 ## Known Issues / TODOs
-- Test course is hardcoded in `init()` — should be removable
 - No input validation on course creation (empty name allowed)
 - Inline styles in JS template literals — consider moving to CSS classes
 

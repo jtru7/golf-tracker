@@ -35,40 +35,6 @@ function init() {
     });
     if (migrated) saveToLocalStorage();
 
-    // Add TEST course if it doesn't exist
-    if (!appData.courses.find(c => c.name === 'TRU TEST Course')) {
-        const testCourse = {
-            id: 'test-course-001',
-            name: 'TRU TEST Course',
-            location: 'Rexburg, ID',
-            numHoles: 9,
-            holes: [
-                { number: 1, par: 4 },
-                { number: 2, par: 3 },
-                { number: 3, par: 5 },
-                { number: 4, par: 4 },
-                { number: 5, par: 4 },
-                { number: 6, par: 3 },
-                { number: 7, par: 4 },
-                { number: 8, par: 5 },
-                { number: 9, par: 4 }
-            ],
-            tees: {
-                red: { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [] },
-                white: {
-                    enabled: true,
-                    rating: 35.5,
-                    slope: 113,
-                    totalYardage: 3200,
-                    yardages: [380, 165, 520, 390, 350, 180, 410, 495, 310]
-                },
-                blue: { enabled: false, rating: null, slope: null, totalYardage: null, yardages: [] }
-            }
-        };
-        appData.courses.push(testCourse);
-        saveToLocalStorage();
-    }
-
     loadCourseSelect();
     renderCourseList();
     renderDashboard();
