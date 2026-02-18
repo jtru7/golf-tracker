@@ -291,9 +291,6 @@ function saveCourse() {
         const slope = parseInt(document.getElementById(`teeSlope${cap}`).value);
         const yardage = parseInt(document.getElementById(`teeYardage${cap}`).value);
 
-        if (rating && (rating < 55 || rating > 80)) {
-            errors.push(`${label} rating should be between 55 and 80.`);
-        }
         if (slope && (slope < 55 || slope > 155)) {
             errors.push(`${label} slope should be between 55 and 155.`);
         }
