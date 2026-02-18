@@ -1427,10 +1427,10 @@ function viewRound(roundId) {
     let scorecardHtml = '';
 
     if (is18) {
-        scorecardHtml = buildScorecardTable(round.holes.slice(0, 9), 'Out') +
-                        buildScorecardTable(round.holes.slice(9, 18), 'In');
+        scorecardHtml = buildScorecardTable(round.holes.slice(0, 9), 'Out', round.roundType) +
+                        buildScorecardTable(round.holes.slice(9, 18), 'In', round.roundType);
     } else {
-        scorecardHtml = buildScorecardTable(round.holes, 'Total');
+        scorecardHtml = buildScorecardTable(round.holes, 'Total', round.roundType);
     }
 
     // Grand total for 18-hole rounds
@@ -1449,7 +1449,7 @@ function viewRound(roundId) {
     document.getElementById('roundModal').classList.add('active');
 }
 
-function buildScorecardTable(holes, label) {
+function buildScorecardTable(holes, label, roundType) {
     const totalPar = holes.reduce((sum, h) => sum + h.par, 0);
     const totalScore = holes.reduce((sum, h) => sum + h.score, 0);
     const totalPutts = holes.reduce((sum, h) => sum + (h.putts || 0), 0);
@@ -1472,6 +1472,23 @@ function buildScorecardTable(holes, label) {
         else if (diff >= 2) cls = 'score-double';
         return `<td class="score-cell ${cls}"><span class="score-shape">${h.score}</span></td>`;
     }).join('') + `<td class="col-total">${totalScore}</td>`;
+
+    // Match result row (only for match play types)
+    const isMatch = MATCH_PLAY_TYPES.includes(roundType);
+    const hasMatchData = isMatch && holes.some(h => h.matchResult);
+    let matchRowHtml = '';
+    if (hasMatchData) {
+        const matchLabels = { win: 'W', draw: 'D', loss: 'L' };
+        const matchClasses = { win: 'match-cell-win', draw: 'match-cell-draw', loss: 'match-cell-loss' };
+        const wins = holes.filter(h => h.matchResult === 'win').length;
+        const draws = holes.filter(h => h.matchResult === 'draw').length;
+        const losses = holes.filter(h => h.matchResult === 'loss').length;
+        const matchRow = holes.map(h => {
+            if (!h.matchResult) return '<td>-</td>';
+            return `<td class="${matchClasses[h.matchResult]}">${matchLabels[h.matchResult]}</td>`;
+        }).join('') + `<td class="col-total">${wins}-${draws}-${losses}</td>`;
+        matchRowHtml = `<tr><td class="row-label">Match</td>${matchRow}</tr>`;
+    }
 
     // Putts row
     const puttsRow = holes.map(h => `<td>${h.putts || 0}</td>`).join('') +
@@ -1500,6 +1517,7 @@ function buildScorecardTable(holes, label) {
             <tr><td class="row-label">Hole</td>${holeRow}</tr>
             <tr><td class="row-label">Par</td>${parRow}</tr>
             <tr><td class="row-label">Score</td>${scoreRow}</tr>
+            ${matchRowHtml}
             <tr><td class="row-label">Putts</td>${puttsRow}</tr>
             <tr><td class="row-label">FWY</td>${fwyRow}</tr>
             <tr><td class="row-label">GIR</td>${girRow}</tr>
@@ -1797,6 +1815,58 @@ function viewCourseDetail(courseId) {
 
     const missArrow = { left: '\u2190', right: '\u2192', long: '\u2191', short: '\u2193' };
 
+    // Check if any hole has match data for this course
+    const hasMatchData = stats.matchesPlayed > 0;
+
+    // Match Play section (conditional)
+    let matchPlayHtml = '';
+    if (hasMatchData) {
+        // Compute overall W/D/L for this course from match rounds
+        const matchRounds = allRounds.filter(r =>
+            r.courseId === courseId &&
+            ['league', 'match_play'].includes(r.roundType) &&
+            r.holes.some(h => h.matchResult));
+        let totalW = 0, totalD = 0, totalL = 0;
+        matchRounds.forEach(r => r.holes.forEach(h => {
+            if (h.matchResult === 'win') totalW++;
+            else if (h.matchResult === 'draw') totalD++;
+            else if (h.matchResult === 'loss') totalL++;
+        }));
+        const totalMH = totalW + totalD + totalL;
+        const winPctVal = totalMH > 0 ? Math.round((totalW / totalMH) * 100) : 0;
+        const drawPctVal = totalMH > 0 ? Math.round((totalD / totalMH) * 100) : 0;
+        const lossPctVal = totalMH > 0 ? Math.round((totalL / totalMH) * 100) : 0;
+        const totalPts = totalW + totalD * 0.5;
+
+        matchPlayHtml = `
+        <div class="dashboard-section">
+            <h3>Match Play</h3>
+            <div class="section-stats">
+                <div class="section-stat">
+                    <div class="section-stat-value">${stats.matchesPlayed}</div>
+                    <div class="section-stat-label">Matches</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${totalW}-${totalD}-${totalL}</div>
+                    <div class="section-stat-label">W-D-L</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${totalPts}</div>
+                    <div class="section-stat-label">Total Points</div>
+                </div>
+                <div class="section-stat">
+                    <div class="section-stat-value">${winPctVal}%</div>
+                    <div class="section-stat-label">Hole Win %</div>
+                </div>
+            </div>
+            ${distBarSm([
+                { cls: 'seg-match-win', pct: winPctVal, label: `Win ${winPctVal}%` },
+                { cls: 'seg-match-draw', pct: drawPctVal, label: `Draw ${drawPctVal}%` },
+                { cls: 'seg-match-loss', pct: lossPctVal, label: `Loss ${lossPctVal}%` }
+            ])}
+        </div>`;
+    }
+
     const holeTableRows = stats.holeStats.map(h => {
         const d = h.distribution;
         const scoringDistBar = d.total > 0 ? distBarSm([
@@ -1813,6 +1883,12 @@ function viewCourseDetail(courseId) {
         const girStr = pct(h.girPct);
         const girMiss = h.girMissDir ? `<span class="miss-dir">${missArrow[h.girMissDir] || ''}</span>` : '';
 
+        // Match W/D/L columns (conditional)
+        const matchCols = hasMatchData ? `
+            <td>${h.matchTotal > 0 ? pct(h.matchWinPct) : '--'}</td>
+            <td>${h.matchTotal > 0 ? pct(h.matchDrawPct) : '--'}</td>
+            <td>${h.matchTotal > 0 ? pct(h.matchLossPct) : '--'}</td>` : '';
+
         return `
         <tr>
             <td class="hole-num-col">${h.holeNumber}</td>
@@ -1823,8 +1899,11 @@ function viewCourseDetail(courseId) {
             <td>${fwyStr} ${fwyMiss}</td>
             <td>${girStr} ${girMiss}</td>
             <td>${val(h.avgPutts)}</td>
+            ${matchCols}
         </tr>`;
     }).join('');
+
+    const matchHeaders = hasMatchData ? '<th>W%</th><th>D%</th><th>L%</th>' : '';
 
     const holeTableHtml = stats.roundsPlayed > 0 ? `
         <div class="dashboard-section">
@@ -1841,6 +1920,7 @@ function viewCourseDetail(courseId) {
                             <th>FWY</th>
                             <th>GIR</th>
                             <th>Putts</th>
+                            ${matchHeaders}
                         </tr>
                     </thead>
                     <tbody>
@@ -1855,7 +1935,7 @@ function viewCourseDetail(courseId) {
         </div>`;
 
     document.getElementById('courseDetailBody').innerHTML =
-        overviewHtml + courseKpisHtml + difficultyHtml + holeTableHtml;
+        overviewHtml + courseKpisHtml + matchPlayHtml + difficultyHtml + holeTableHtml;
 
     // Wire edit button
     document.getElementById('courseDetailEditBtn').onclick = () => {

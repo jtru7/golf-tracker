@@ -1246,6 +1246,15 @@ button.secondary:hover {
     color: var(--text-dark);
 }
 
+/* Match result cells in scorecard */
+.match-cell-win { background: rgba(45, 95, 63, 0.2); color: var(--fairway-green); font-weight: 700; }
+.match-cell-draw { background: rgba(212, 160, 23, 0.15); color: var(--gold); font-weight: 700; }
+.match-cell-loss { background: rgba(168, 68, 72, 0.15); color: var(--red); font-weight: 700; }
+
+[data-theme="dark"] .match-cell-win { background: rgba(45, 122, 74, 0.25); }
+[data-theme="dark"] .match-cell-draw { background: rgba(224, 176, 48, 0.2); }
+[data-theme="dark"] .match-cell-loss { background: rgba(212, 92, 92, 0.2); }
+
 .fairway-hit {
     color: var(--fairway-green);
     font-weight: 700;

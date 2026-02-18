@@ -343,9 +343,11 @@ function computeCourseStats(courseId, allRounds, course) {
                 holeNumber: h.number, par: h.par, scoringAvg: null, vsPar: null,
                 roundsWithData: 0, distribution: { ...emptyDist },
                 fairwayPct: null, fairwayMissDir: null,
-                girPct: null, girMissDir: null, avgPutts: null
+                girPct: null, girMissDir: null, avgPutts: null,
+                matchTotal: 0, matchWinPct: null, matchDrawPct: null, matchLossPct: null
             })),
-            hardestHoles: [], easiestHoles: []
+            hardestHoles: [], easiestHoles: [],
+            matchesPlayed: 0
         };
     }
 
@@ -378,7 +380,8 @@ function computeCourseStats(courseId, allRounds, course) {
                 holeNumber: holeNum, par, scoringAvg: null, vsPar: null,
                 roundsWithData: 0, distribution: { ...emptyDist },
                 fairwayPct: null, fairwayMissDir: null,
-                girPct: null, girMissDir: null, avgPutts: null
+                girPct: null, girMissDir: null, avgPutts: null,
+                matchTotal: 0, matchWinPct: null, matchDrawPct: null, matchLossPct: null
             };
         }
 
@@ -437,6 +440,16 @@ function computeCourseStats(courseId, allRounds, course) {
         const totalPutts = entries.reduce((s, h) => s + (h.putts || 0), 0);
         const avgPutts = parseFloat((totalPutts / entries.length).toFixed(1));
 
+        // Match play per-hole stats
+        const matchEntries = entries.filter(h => h.matchResult);
+        const matchTotal = matchEntries.length;
+        let matchWins = 0, matchDraws = 0, matchLosses = 0;
+        matchEntries.forEach(h => {
+            if (h.matchResult === 'win') matchWins++;
+            else if (h.matchResult === 'draw') matchDraws++;
+            else if (h.matchResult === 'loss') matchLosses++;
+        });
+
         return {
             holeNumber: holeNum, par, scoringAvg, vsPar: holeVsPar,
             roundsWithData: entries.length,
@@ -449,7 +462,11 @@ function computeCourseStats(courseId, allRounds, course) {
                 doublePct: Math.round((double / total) * 100),
                 triplePct: Math.round((triple / total) * 100)
             },
-            fairwayPct, fairwayMissDir, girPct, girMissDir, avgPutts
+            fairwayPct, fairwayMissDir, girPct, girMissDir, avgPutts,
+            matchTotal,
+            matchWinPct: matchTotal > 0 ? Math.round((matchWins / matchTotal) * 100) : null,
+            matchDrawPct: matchTotal > 0 ? Math.round((matchDraws / matchTotal) * 100) : null,
+            matchLossPct: matchTotal > 0 ? Math.round((matchLosses / matchTotal) * 100) : null
         };
     });
 
@@ -458,11 +475,18 @@ function computeCourseStats(courseId, allRounds, course) {
     const hardestHoles = [...withData].sort((a, b) => b.vsPar - a.vsPar).slice(0, 3);
     const easiestHoles = [...withData].sort((a, b) => a.vsPar - b.vsPar).slice(0, 3);
 
+    // Match play stats for this course
+    const matchPlayTypes = ['league', 'match_play'];
+    const matchRounds = courseRounds.filter(r => matchPlayTypes.includes(r.roundType) &&
+        r.holes.some(h => h.matchResult));
+    const matchesPlayed = matchRounds.length;
+
     return {
         roundsPlayed: courseRounds.length, avgScore, totalPar, vsPar,
         bestRound: { score: best.totalScore, date: best.date, id: best.id },
         worstRound: { score: worst.totalScore, date: worst.date, id: worst.id },
-        courseStats, holeStats, hardestHoles, easiestHoles
+        courseStats, holeStats, hardestHoles, easiestHoles,
+        matchesPlayed
     };
 }
 
