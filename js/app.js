@@ -1822,7 +1822,7 @@ function viewCourseDetail(courseId) {
     let matchPlayHtml = '';
     if (hasMatchData) {
         // Compute overall W/D/L for this course from match rounds
-        const matchRounds = allRounds.filter(r =>
+        const matchRounds = appData.rounds.filter(r =>
             r.courseId === courseId &&
             ['league', 'match_play'].includes(r.roundType) &&
             r.holes.some(h => h.matchResult));
